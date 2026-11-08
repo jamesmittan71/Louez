@@ -197,17 +197,10 @@ export async function generateContract({
         pickupLocationSnapshot: reservation.pickupLocationSnapshot,
         returnLocationSnapshot: reservation.returnLocationSnapshot,
         items: reservation.items.map((item) => {
-          const snapshot = item.productSnapshot as { name: string; description?: string | null };
-          const breakdown = item.pricingBreakdown as {
-            chargeKind?: string;
-            duration?: number;
-            billedQuantity?: number | null;
-            isManualOverride?: boolean;
-            pricingKind?: string;
-          } | null;
+          const breakdown = item.pricingBreakdown;
           const presentation = presentCommercialLine({
-            name: snapshot.name,
-            description: snapshot.description,
+            name: item.productSnapshot.name,
+            description: item.productSnapshot.description,
             chargeKind: breakdown?.chargeKind,
             isManualOverride: breakdown?.isManualOverride === true,
             isCustomItem: item.productId === null,
@@ -218,7 +211,10 @@ export async function generateContract({
             billedQuantity: breakdown?.billedQuantity,
           });
           return {
-            productSnapshot: { name: presentation.name, description: snapshot.description },
+            productSnapshot: {
+              name: presentation.name,
+              description: item.productSnapshot.description,
+            },
             quantity: presentation.quantity,
             unitPrice: presentation.unitPrice.toFixed(2),
             totalPrice: item.totalPrice,
