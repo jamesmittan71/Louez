@@ -61,6 +61,9 @@ interface NewReservationSummaryPanelProps {
   discount: ReservationDiscount;
   /** Discount resolved in currency units, already clamped to the subtotal. */
   discountAmount: number;
+  taxAmount?: number | null;
+  taxDisplayMode?: "inclusive" | "exclusive" | null;
+  chargedTotal?: number;
   onDiscountChange: (discount: ReservationDiscount) => void;
   depositOverride: number | null;
   onDepositOverrideChange: (value: number | null) => void;
@@ -87,6 +90,9 @@ export function NewReservationSummaryPanel({
   deposit,
   discount,
   discountAmount,
+  taxAmount = null,
+  taxDisplayMode = null,
+  chargedTotal,
   onDiscountChange,
   depositOverride,
   onDepositOverrideChange,
@@ -127,7 +133,8 @@ export function NewReservationSummaryPanel({
 
   const durationLabel = useReservationDurationLabel(detailedDuration, duration);
 
-  const total = subtotal + tulipInsuranceAmount + deliveryFee - discountAmount;
+  const entryTotal = subtotal + tulipInsuranceAmount + deliveryFee - discountAmount;
+  const total = chargedTotal ?? entryTotal;
 
   return (
     <Card>
@@ -358,6 +365,15 @@ export function NewReservationSummaryPanel({
               </span>
             )}
           </div>
+
+          {taxAmount != null && taxAmount > 0 && (
+            <div className="flex justify-between gap-2">
+              <span className="text-muted-foreground">
+                {taxDisplayMode === "inclusive" ? t("vatIncluded") : t("vat")}
+              </span>
+              <span className="tabular-nums">{formatCurrency(taxAmount)}</span>
+            </div>
+          )}
 
           <Separator className="my-2" />
           <div className="flex justify-between gap-2 text-base font-semibold">

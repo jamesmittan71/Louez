@@ -7,7 +7,7 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { convertImageForPdf } from "./image-utils";
 import { getReservationInsuredProductIds } from "@/lib/reservations/get-insured-product-ids";
-import { getLogoForLightBackground, resolveReservationBilling } from "@louez/utils";
+import { getLogoForLightBackground, presentCommercialLine, resolveReservationBilling } from "@louez/utils";
 
 import { getContractTranslations } from "./contract-i18n";
 import { isLocale } from "@/lib/i18n/format-locale";
@@ -196,15 +196,38 @@ export async function generateContract({
         returnPostalCode: reservation.returnPostalCode,
         pickupLocationSnapshot: reservation.pickupLocationSnapshot,
         returnLocationSnapshot: reservation.returnLocationSnapshot,
-        items: reservation.items.map((item) => ({
-          productSnapshot: item.productSnapshot as { name: string; description?: string | null },
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          totalPrice: item.totalPrice,
-          assignedUnitIdentifiers:
-            item.assignedUnits?.map((au) => au.identifierSnapshot).filter(Boolean) || [],
-          insured: item.productId !== null && insuredProductIds.has(item.productId),
-        })),
+        items: reservation.items.map((item) => {
+          const snapshot = item.productSnapshot as { name: string; description?: string | null };
+          const breakdown = item.pricingBreakdown as {
+            chargeKind?: string;
+            duration?: number;
+            billedQuantity?: number | null;
+            isManualOverride?: boolean;
+            pricingKind?: string;
+          } | null;
+          const presentation = presentCommercialLine({
+            name: snapshot.name,
+            description: snapshot.description,
+            chargeKind: breakdown?.chargeKind,
+            isManualOverride: breakdown?.isManualOverride === true,
+            isCustomItem: item.productId === null,
+            pricingKind: breakdown?.pricingKind,
+            storedQuantity: item.quantity,
+            total: Number(item.totalPrice),
+            duration: breakdown?.duration,
+            billedQuantity: breakdown?.billedQuantity,
+          });
+          return {
+            productSnapshot: { name: presentation.name, description: snapshot.description },
+            quantity: presentation.quantity,
+            unitPrice: presentation.unitPrice.toFixed(2),
+            totalPrice: item.totalPrice,
+            note: presentation.note,
+            assignedUnitIdentifiers:
+              item.assignedUnits?.map((au) => au.identifierSnapshot).filter(Boolean) || [],
+            insured: item.productId !== null && insuredProductIds.has(item.productId),
+          };
+        }),
         payments: reservation.payments.map((payment) => ({
           id: payment.id,
           amount: payment.amount,

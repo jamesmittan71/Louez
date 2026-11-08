@@ -49,6 +49,8 @@ interface NewReservationConfirmDrawerProps {
   tulipInsuranceAmount: number;
   deliveryFee: number;
   discountAmount: number;
+  taxAmount?: number | null;
+  taxDisplayMode?: "inclusive" | "exclusive" | null;
   /** Deposit after any manual override, i.e. what will actually be held. */
   deposit: number;
   total: number;
@@ -84,6 +86,8 @@ export function NewReservationConfirmDrawer({
   tulipInsuranceAmount,
   deliveryFee,
   discountAmount,
+  taxAmount = null,
+  taxDisplayMode = null,
   deposit,
   total,
   willSendConfirmationEmail,
@@ -267,6 +271,15 @@ export function NewReservationConfirmDrawer({
                 <span className="tabular-nums text-green-600">
                   -{formatCurrency(discountAmount)}
                 </span>
+              </div>
+            )}
+
+            {taxAmount != null && taxAmount > 0 && (
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-muted-foreground">
+                  {taxDisplayMode === "inclusive" ? t("vatIncluded") : t("vat")}
+                </span>
+                <span className="tabular-nums">{formatCurrency(taxAmount)}</span>
               </div>
             )}
 
