@@ -6,6 +6,14 @@ All notable changes to Louez are documented here.
 
 ---
 
+## [Unreleased]
+
+### 🐳 Self-Hosting
+
+- 🩹 **Store logo uploads behind a private MinIO no longer fail as HTTP 401** — The bundled S3 client sent the AWS SDK's default CRC32 checksum on every proxied upload. Stores that do not sign that header answer AccessDenied or SignatureDoesNotMatch, and the upload gateway reported that as 401 on `PUT /api/files/logo?op=proxy`. Checksums are now sent only when the operation requires them. A session is still required to mint an upload, and a missing or altered upload token is still rejected.
+
+---
+
 ## [2.3.1] - October 14, 2026
 
 ### 🐳 Self-Hosting
@@ -672,6 +680,14 @@ _For upgrade instructions, see the [documentation](https://louez.io/docs)._
 > [🇬🇧 English](#changelog) | 🇫🇷 **Français**
 
 Toutes les évolutions notables de Louez sont documentées ici.
+
+---
+
+## [Unreleased]
+
+### 🐳 Auto-hébergement
+
+- 🩹 **L'envoi du logo vers un MinIO privé ne répond plus 401** — Le client S3 fourni ajoutait le checksum CRC32 par défaut du SDK AWS à chaque envoi par proxy. Les stockages qui ne signent pas cet en-tête répondent AccessDenied ou SignatureDoesNotMatch, et la passerelle d'envoi traduisait cela en 401 sur `PUT /api/files/logo?op=proxy`. Les checksums ne partent plus que lorsque l'opération l'exige. Une session reste nécessaire pour obtenir un envoi, et un jeton absent ou modifié est toujours refusé.
 
 ---
 
