@@ -32,11 +32,12 @@ export function readQuoteChargeKind(value: unknown): QuoteChargeKind {
 
 export function readProductTaxSettings(value: unknown): ProductTaxSettings | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const record = value as { inheritFromStore?: unknown; customRate?: unknown };
-  if (typeof record.inheritFromStore !== "boolean") return null;
+  if (!("inheritFromStore" in value) || typeof value.inheritFromStore !== "boolean") return null;
+  const customRate =
+    "customRate" in value && typeof value.customRate === "number" ? value.customRate : undefined;
   return {
-    inheritFromStore: record.inheritFromStore,
-    customRate: typeof record.customRate === "number" ? record.customRate : undefined,
+    inheritFromStore: value.inheritFromStore,
+    customRate,
   };
 }
 
