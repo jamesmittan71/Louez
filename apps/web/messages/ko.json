@@ -8434,6 +8434,7 @@
     "minRentalDurationViolation": "대여 기간은 최소 {duration} 이상이어야 합니다.",
     "maxRentalDurationViolation": "대여 기간은 {duration}를 초과할 수 없습니다.",
     "deliveryNotEnabled": "이 매장에는 배달이 활성화되어 있지 않습니다.",
+    "deliveryAndDistanceConflict": "This quote has both the store delivery fee and a distance line. Keep one of them. Charging both is not configured.",
     "deliveryMinimumOrderAmountNotMet": "렌탈 {amount}부터 배송 가능",
     "deliveryAddressRequired": "유효한 배송 주소를 입력하세요.",
     "storeCoordinatesNotConfigured": "매장 좌표가 구성되지 않았습니다.",

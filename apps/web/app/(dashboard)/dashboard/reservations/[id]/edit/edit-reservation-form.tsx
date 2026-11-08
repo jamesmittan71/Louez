@@ -40,6 +40,7 @@ import {
   quoteLineTaxRate,
   readProductTaxSettings,
   readQuoteChargeKind,
+  storeDeliveryDuplicatesDistanceCharge,
 } from "@louez/utils";
 import { useFormatLocale } from "@/hooks/use-format-locale";
 import { calculateDuration } from "@/lib/utils/duration";
@@ -833,6 +834,15 @@ export function EditReservationForm({
 
     if (items.length === 0) {
       toastManager.add({ title: t("edit.noItems"), type: "error" });
+      return;
+    }
+    if (
+      storeDeliveryDuplicatesDistanceCharge(
+        delivery.totalFee,
+        items.some((item) => item.chargeKind === "distance"),
+      )
+    ) {
+      toastManager.add({ title: tErrors("deliveryAndDistanceConflict"), type: "error" });
       return;
     }
     captureReservationActionStarted({

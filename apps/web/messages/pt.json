@@ -8434,6 +8434,7 @@
     "minRentalDurationViolation": "A duração do aluguer deve ser de pelo menos {duration}",
     "maxRentalDurationViolation": "A duração do aluguer não pode exceder {duration}",
     "deliveryNotEnabled": "A entrega não está ativada para esta loja",
+    "deliveryAndDistanceConflict": "This quote has both the store delivery fee and a distance line. Keep one of them. Charging both is not configured.",
     "deliveryMinimumOrderAmountNotMet": "A entrega está disponível a partir de {amount} de aluguel",
     "deliveryAddressRequired": "Por favor, insira um endereço de entrega válido",
     "storeCoordinatesNotConfigured": "As coordenadas da loja não estão configuradas",

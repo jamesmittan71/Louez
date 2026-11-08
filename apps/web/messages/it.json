@@ -8434,6 +8434,7 @@
     "minRentalDurationViolation": "La durata del noleggio deve essere di almeno {duration}",
     "maxRentalDurationViolation": "La durata del noleggio non può superare le {duration}",
     "deliveryNotEnabled": "La consegna non è attivata per questo negozio",
+    "deliveryAndDistanceConflict": "This quote has both the store delivery fee and a distance line. Keep one of them. Charging both is not configured.",
     "deliveryMinimumOrderAmountNotMet": "La consegna è disponibile a partire da {amount} di noleggio",
     "deliveryAddressRequired": "Inserisci un indirizzo di consegna valido",
     "storeCoordinatesNotConfigured": "Le coordinate del negozio non sono configurate",

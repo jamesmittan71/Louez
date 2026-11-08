@@ -8,10 +8,11 @@ import { useLogger, withEvlog } from "@/lib/evlog";
 import { marketplaceCancellationAdapter } from "@/lib/marketplace-booking";
 import { getCanonicalUrl } from "@/lib/seo";
 
-const handlePost = async (
-  request: NextRequest,
-  context: RouteContext<"/api/booking/v1/bookings/[reservationId]/cancel">,
-) => {
+interface BookingCancelRouteContext {
+  params: Promise<{ reservationId: string }>;
+}
+
+const handlePost = async (request: NextRequest, context: BookingCancelRouteContext) => {
   const logger = useLogger();
   try {
     const [body, routeParams] = await Promise.all([

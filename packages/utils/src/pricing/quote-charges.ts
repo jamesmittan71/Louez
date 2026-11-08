@@ -343,6 +343,20 @@ export function buildDashboardQuoteTax(input: {
   };
 }
 
+/**
+ * The store's own delivery fee and a manual kilometre line are separate
+ * transport charges. Both can be entered today, and no journey rule says
+ * whether that is one trip counted twice. Refuse the combination until that
+ * rule exists. A distance line with no store delivery fee, or a store
+ * delivery fee with no distance line, stays allowed.
+ */
+export function storeDeliveryDuplicatesDistanceCharge(
+  deliveryFee: number,
+  hasDistanceLine: boolean,
+): boolean {
+  return hasDistanceLine && Number.isFinite(deliveryFee) && deliveryFee > 0;
+}
+
 export function quoteLineTaxRate(
   taxSettings: TaxSettings | undefined,
   productTaxSettings: ProductTaxSettings | null | undefined,

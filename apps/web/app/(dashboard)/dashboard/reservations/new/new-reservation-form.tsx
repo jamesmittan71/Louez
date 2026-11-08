@@ -42,6 +42,7 @@ import {
   formatCurrency,
   quoteLineTaxRate,
   readProductTaxSettings,
+  storeDeliveryDuplicatesDistanceCharge,
 } from "@louez/utils";
 
 import { invalidateReservationList } from "@/lib/orpc/invalidation";
@@ -383,6 +384,15 @@ export function NewReservationForm({
   ) => {
     if (!value.startDate || !value.endDate) {
       toastManager.add({ title: t("selectDatesError"), type: "error" });
+      return;
+    }
+    if (
+      storeDeliveryDuplicatesDistanceCharge(
+        delivery.totalFee,
+        customItems.some((item) => item.chargeKind === "distance"),
+      )
+    ) {
+      toastManager.add({ title: tErrors("deliveryAndDistanceConflict"), type: "error" });
       return;
     }
 

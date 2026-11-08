@@ -6,6 +6,7 @@ import {
   presentCommercialLine,
   priceQuoteCharge,
   readQuoteChargeKind,
+  storeDeliveryDuplicatesDistanceCharge,
 } from "./quote-charges";
 
 test("a hire span is charged once, and one-off and distance lines do not repeat with it", () => {
@@ -127,6 +128,12 @@ test("documents show a rate times the billed quantity, and kilometres are not st
   assert.equal(catalogue.quantity, 2);
   assert.equal(catalogue.unitPrice, 500);
   assert.equal(catalogue.note, null);
+});
+
+test("a store delivery fee and a distance line are refused together", () => {
+  assert.equal(storeDeliveryDuplicatesDistanceCharge(180, true), true);
+  assert.equal(storeDeliveryDuplicatesDistanceCharge(0, true), false);
+  assert.equal(storeDeliveryDuplicatesDistanceCharge(180, false), false);
 });
 
 test("dashboard VAT follows the store rate and does not tax an exempt line twice", () => {

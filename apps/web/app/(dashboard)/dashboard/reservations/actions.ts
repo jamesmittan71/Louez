@@ -92,6 +92,7 @@ import {
   quoteLineTaxRate,
   readProductTaxSettings,
   readQuoteChargeKind,
+  storeDeliveryDuplicatesDistanceCharge,
 } from "@louez/utils";
 import {
   type ReservationStatus,
@@ -1435,6 +1436,15 @@ export async function createManualReservation(data: CreateReservationData) {
     }
   }
 
+  if (
+    storeDeliveryDuplicatesDistanceCharge(
+      deliveryFeeAmount,
+      customItemDetails.some((item) => item.chargeKind === "distance"),
+    )
+  ) {
+    return { error: "errors.deliveryAndDistanceConflict" };
+  }
+
   // Generate reservation number
   const reservationNumber = await generateReservationNumber(store.id);
 
@@ -2740,6 +2750,7 @@ export async function updateReservation(
       }),
   );
   const itemWrites: ReservationItemWrite[] = [];
+  let hasDistanceCharge = false;
   let removedReservationItemIds: string[] = [];
   const insuranceItemWrites: ReservationItemWrite[] = [];
   let extraInsuranceItemIdsToDelete: string[] = [];
@@ -2822,6 +2833,7 @@ export async function updateReservation(
           stockQuantity = priced.stockQuantity;
           billedQuantity = priced.billedQuantity;
           manualPricingKind = "fixed";
+          if (priced.chargeKind === "distance") hasDistanceCharge = true;
         }
       }
 
@@ -3114,6 +3126,7 @@ export async function updateReservation(
                 rentalDuration,
               });
         totalPrice = priced ? priced.total : finalUnitPrice * itemDuration * item.quantity;
+        if (priced?.chargeKind === "distance") hasDistanceCharge = true;
         const nextPricingBreakdown = item.pricingBreakdown
           ? {
               ...item.pricingBreakdown,
@@ -3422,6 +3435,10 @@ export async function updateReservation(
     const hasAddressLeg =
       data.delivery.outbound.method === "address" || data.delivery.return.method === "address";
     deliveryUpdateFields.deliveryOption = hasAddressLeg ? "delivery" : "pickup";
+  }
+
+  if (storeDeliveryDuplicatesDistanceCharge(deliveryFee, hasDistanceCharge)) {
+    return { error: "errors.deliveryAndDistanceConflict" };
   }
 
   // VAT uses the store rate. One-off and distance lines are included once.

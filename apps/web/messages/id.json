@@ -8434,6 +8434,7 @@
     "minRentalDurationViolation": "Durasi sewa minimal harus {duration}",
     "maxRentalDurationViolation": "Durasi sewa tidak boleh melebihi {duration}",
     "deliveryNotEnabled": "Pengiriman tidak diaktifkan untuk toko ini",
+    "deliveryAndDistanceConflict": "This quote has both the store delivery fee and a distance line. Keep one of them. Charging both is not configured.",
     "deliveryMinimumOrderAmountNotMet": "Pengiriman tersedia dari {amount} sewa",
     "deliveryAddressRequired": "Silakan masukkan alamat pengiriman yang valid",
     "storeCoordinatesNotConfigured": "Koordinat toko tidak dikonfigurasi",

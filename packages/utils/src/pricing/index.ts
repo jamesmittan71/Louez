@@ -50,6 +50,7 @@ export {
   readProductTaxSettings,
   priceQuoteCharge,
   presentCommercialLine,
+  storeDeliveryDuplicatesDistanceCharge,
   buildDashboardQuoteTax,
   quoteLineTaxRate,
 } from "./quote-charges";

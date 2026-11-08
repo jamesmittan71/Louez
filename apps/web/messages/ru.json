@@ -8434,6 +8434,7 @@
     "minRentalDurationViolation": "Продолжительность аренды должна быть не менее {duration}.",
     "maxRentalDurationViolation": "Срок аренды не может превышать {duration}.",
     "deliveryNotEnabled": "Доставка не включена для этого магазина.",
+    "deliveryAndDistanceConflict": "This quote has both the store delivery fee and a distance line. Keep one of them. Charging both is not configured.",
     "deliveryMinimumOrderAmountNotMet": "Возможна доставка с {amount} аренды.",
     "deliveryAddressRequired": "Пожалуйста, введите действительный адрес доставки",
     "storeCoordinatesNotConfigured": "Координаты магазина не настроены",

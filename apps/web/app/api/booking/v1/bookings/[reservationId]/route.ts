@@ -7,10 +7,11 @@ import { bookingJson, bookingServiceError, verifyBookingGet } from "@/lib/bookin
 import { useLogger, withEvlog } from "@/lib/evlog";
 import { getCanonicalUrl } from "@/lib/seo";
 
-const handleGet = async (
-  request: NextRequest,
-  context: RouteContext<"/api/booking/v1/bookings/[reservationId]">,
-) => {
+interface BookingRouteContext {
+  params: Promise<{ reservationId: string }>;
+}
+
+const handleGet = async (request: NextRequest, context: BookingRouteContext) => {
   const logger = useLogger();
   try {
     if (!(await verifyBookingGet(request))) {
