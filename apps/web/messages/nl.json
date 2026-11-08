@@ -2351,7 +2351,9 @@
           "tooFar": "Adres overschrijdt maximale afstand ({maxDistance} km)",
           "savings": "Besparing",
           "deliveryFee": "Bezorgkosten"
-        }
+        },
+        "vat": "VAT",
+        "vatIncluded": "VAT included"
       },
       "contract": {
         "title": "Contract",
@@ -2529,7 +2531,14 @@
           "addButton": "Toevoegen",
           "nameRequired": "Voer een naam in voor het artikel",
           "priceRequired": "Voer een geldige prijs in",
-          "added": "Aangepast artikel toegevoegd"
+          "added": "Aangepast artikel toegevoegd",
+          "chargeKind": "How this line is billed",
+          "chargeKindDuration": "Hire rate for the reservation period",
+          "chargeKindOnce": "One-off fee",
+          "chargeKindDistance": "Distance charge",
+          "chargeKindOnceHint": "Charged once for this job. The hire length does not repeat it.",
+          "chargeKindDistanceHint": "Kilometres times the rate you enter. This is not stock and the hire length does not multiply it.",
+          "kilometres": "Kilometres"
         },
         "priceOverride": {
           "dialogTitle": "Prijs bewerken",
@@ -2586,7 +2595,9 @@
           "label": "Korting",
           "add": "Korting toevoegen",
           "remove": "Korting verwijderen"
-        }
+        },
+        "vat": "VAT",
+        "vatIncluded": "VAT included"
       },
       "rejectDialog": {
         "title": "Aanvraag afwijzen",

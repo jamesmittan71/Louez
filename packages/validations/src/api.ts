@@ -518,6 +518,8 @@ export const dashboardReservationUpdateReservationInputSchema = z.object({
           depositPerUnit: z.number().min(0),
           isManualPrice: z.boolean().optional(),
           pricingMode: z.enum(["hour", "day", "week"]).optional(),
+          chargeKind: z.enum(["duration", "once", "distance"]).optional(),
+          billedQuantity: z.number().positive().max(1_000_000).optional(),
           productSnapshot: z.object({
             name: z.string().trim().min(1).max(500),
             description: z.string().max(100000).nullable().optional(),
@@ -605,6 +607,32 @@ export const dashboardReservationCreateManualReservationInputSchema = z.object({
           deposit: z.number().min(0),
           quantity: z.number().int().min(1),
           pricingMode: z.enum(["hour", "day", "week"]),
+          chargeKind: z.enum(["duration", "once", "distance"]).optional(),
+          billedQuantity: z.number().positive().max(1_000_000).optional(),
+        })
+        .superRefine((item, context) => {
+          if (item.chargeKind === "once" && item.unitPrice < 0) {
+            context.addIssue({
+              code: "custom",
+              message: "unitPrice must be zero or greater",
+              path: ["unitPrice"],
+            });
+          }
+          if (item.chargeKind !== "distance") return;
+          if (item.billedQuantity == null) {
+            context.addIssue({
+              code: "custom",
+              message: "billedQuantity is required for a distance charge",
+              path: ["billedQuantity"],
+            });
+          }
+          if (item.unitPrice < 0) {
+            context.addIssue({
+              code: "custom",
+              message: "unitPrice must be zero or greater",
+              path: ["unitPrice"],
+            });
+          }
         }),
       )
       .optional(),
