@@ -1,7 +1,7 @@
 import "server-only";
 
 import { FilesError } from "files-sdk";
-import { createFilesRouter, type FilesApi } from "files-sdk/api";
+import { type FilesApi } from "files-sdk/api";
 
 import { env as authEnv } from "@louez/auth/env";
 
@@ -10,8 +10,8 @@ import { auth } from "@/lib/auth";
 import { getImageFiles } from "@/lib/storage/files";
 import { getCurrentStore } from "@/lib/store-context";
 
+import { createImageFilesGateway } from "./image-files-gateway";
 import { IMAGE_UPLOAD_CONFIG, type ImageUploadKind } from "./image-upload";
-import { createPublicFilesRequest } from "./util.public-files-request";
 
 const routers = new Map<ImageUploadKind, FilesApi>();
 
@@ -59,10 +59,10 @@ const getKeyPrefix = async (kind: ImageUploadKind) => {
 const createImageFilesRouter = (kind: ImageUploadKind) => {
   const { appOrigin, allowedOrigins } = getOriginConfig();
 
-  const router = createFilesRouter({
+  return createImageFilesGateway({
     files: () => getImageFiles(),
-    operations: ["upload", "url", "delete"],
     allowedOrigins,
+    fallbackOrigin: appOrigin,
     maxUploadSize: IMAGE_UPLOAD_CONFIG[kind].maxSize,
     secret: `louez-image-upload:${authEnv.AUTH_SECRET}`,
     authorize: async () => ({
@@ -70,11 +70,6 @@ const createImageFilesRouter = (kind: ImageUploadKind) => {
       disposition: "inline",
     }),
   });
-
-  return {
-    handle: (request: Request) =>
-      router.handle(createPublicFilesRequest(request, allowedOrigins, appOrigin)),
-  };
 };
 
 export const getImageFilesRouter = (kind: ImageUploadKind) => {
