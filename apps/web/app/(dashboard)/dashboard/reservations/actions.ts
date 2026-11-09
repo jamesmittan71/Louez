@@ -2510,7 +2510,7 @@ export async function updateReservation(
         }
       } else if (item.isManualPrice) {
         pricingBreakdown = {
-          ...(existingBreakdown ?? {}),
+          ...existingBreakdown,
           basePrice: finalUnitPrice,
           effectivePrice: finalUnitPrice,
           duration,
