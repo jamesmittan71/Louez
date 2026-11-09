@@ -8,6 +8,7 @@ import { validation } from "files-sdk/validation";
 
 import { env } from "@/env";
 import { publicImageAssets } from "@/lib/storage/public-image-assets-plugin";
+import { applyS3CompatibleChecksumDefaults } from "@/lib/storage/util.s3-compatible-checksum";
 import { IMAGE_UPLOAD_MIME_TYPES } from "@/lib/uploads/image-upload";
 
 let imageFiles: ReturnType<typeof createImageFiles> | undefined;
@@ -22,10 +23,10 @@ let rawClient: S3Client | undefined;
  * bucket (absolute S3_PUBLIC_URL) uses presigned direct uploads, ACLs, and
  * serves reads from the bucket. Works the same in standalone and platform.
  */
-export const isProxiedStorage = (): boolean =>
-  (env.S3_PUBLIC_URL ?? "").startsWith("/");
+export const isProxiedStorage = (): boolean => (env.S3_PUBLIC_URL ?? "").startsWith("/");
 
 const createS3Adapter = () => {
+  applyS3CompatibleChecksumDefaults();
   const adapter = s3({
     bucket: env.S3_BUCKET,
     region: env.S3_REGION,

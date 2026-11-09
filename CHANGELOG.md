@@ -6,6 +6,18 @@ All notable changes to Louez are documented here.
 
 ---
 
+## [Unreleased]
+
+### 🧾 Quotes
+
+- 💶 **Dashboard quotes keep VAT, one-off fees, and distance charges** — A quote created in the dashboard stores the store's VAT split, so the quote, contract, and invoice show the same exclusive amount, VAT, and total. A one-off fee stays the amount entered for that job when the hire dates change. A distance line is kilometres times the rate entered for that job, and it does not reserve stock. Hire for the reservation span is still one duration line: the first and last day are not added a second time.
+
+### 🐳 Self-Hosting
+
+- 🩹 **Store logo uploads behind a private MinIO no longer fail as HTTP 401** — The bundled S3 client sent the AWS SDK's default CRC32 checksum on every proxied upload. Stores that do not sign that header answer AccessDenied or SignatureDoesNotMatch, and the upload gateway reported that as 401 on `PUT /api/files/logo?op=proxy`. Checksums are now sent only when the operation requires them. A session is still required to mint an upload, and a missing or altered upload token is still rejected.
+
+---
+
 ## [2.3.1] - October 14, 2026
 
 ### 🐳 Self-Hosting
@@ -672,6 +684,18 @@ _For upgrade instructions, see the [documentation](https://louez.io/docs)._
 > [🇬🇧 English](#changelog) | 🇫🇷 **Français**
 
 Toutes les évolutions notables de Louez sont documentées ici.
+
+---
+
+## [Non publié]
+
+### 🧾 Devis
+
+- 💶 **Les devis du tableau de bord conservent la TVA, les frais uniques et le transport au kilomètre** — Un devis créé dans le tableau de bord enregistre la répartition de TVA de la boutique, de sorte que le devis, le contrat et la facture montrent le même montant hors taxe, la même TVA et le même total. Un frais unique reste le montant saisi pour ce travail quand les dates de location changent. Une ligne de distance est le nombre de kilomètres multiplié par le tarif saisi, et elle ne réserve pas de stock. La location de la période reste une seule ligne : le premier et le dernier jour ne sont pas ajoutés une seconde fois.
+
+### 🐳 Auto-hébergement
+
+- 🩹 **L'envoi du logo vers un MinIO privé ne répond plus 401** — Le client S3 fourni ajoutait le checksum CRC32 par défaut du SDK AWS à chaque envoi par proxy. Les stockages qui ne signent pas cet en-tête répondent AccessDenied ou SignatureDoesNotMatch, et la passerelle d'envoi traduisait cela en 401 sur `PUT /api/files/logo?op=proxy`. Les checksums ne partent plus que lorsque l'opération l'exige. Une session reste nécessaire pour obtenir un envoi, et un jeton absent ou modifié reste refusé.
 
 ---
 

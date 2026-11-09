@@ -82,10 +82,16 @@ import {
   type PricingTier,
   type SeasonalPricingConfig,
   type SeasonalPriceResult,
+  type QuoteChargeKind,
+  buildDashboardQuoteTax,
   calculateDuration,
   calculateDurationMinutes,
   calculateFixedPrice,
   calculateSeasonalAwarePrice,
+  priceQuoteCharge,
+  quoteLineTaxRate,
+  readProductTaxSettings,
+  readQuoteChargeKind,
 } from "@louez/utils";
 import {
   type ReservationStatus,
@@ -995,6 +1001,8 @@ interface CreateReservationData {
     deposit: number;
     quantity: number;
     pricingMode: PricingMode;
+    chargeKind?: QuoteChargeKind;
+    billedQuantity?: number;
   }>;
   delivery?: {
     outbound: {
@@ -1236,27 +1244,48 @@ export async function createManualReservation(data: CreateReservationData) {
     }),
   );
 
-  // Process custom items (no tiered pricing for custom items)
+  // Process custom items. One-off and distance lines do not follow the hire span.
+  for (const item of data.customItems || []) {
+    const chargeKind = readQuoteChargeKind(item.chargeKind);
+    if (chargeKind === "distance" && !(item.billedQuantity != null && item.billedQuantity > 0)) {
+      return { error: "errors.invalidData" };
+    }
+    if ((chargeKind === "once" || chargeKind === "distance") && item.unitPrice < 0) {
+      return { error: "errors.invalidData" };
+    }
+  }
   const customItemDetails = (data.customItems || []).map((item) => {
-    const duration = calculateDuration(data.startDate, data.endDate, item.pricingMode);
-    const totalPrice = item.unitPrice * duration * item.quantity;
-    const totalDeposit = item.deposit * item.quantity;
+    const rentalDuration = calculateDuration(data.startDate, data.endDate, item.pricingMode);
+    const chargeKind = readQuoteChargeKind(item.chargeKind);
+    const priced = priceQuoteCharge({
+      chargeKind,
+      rate: item.unitPrice,
+      quantity: item.quantity,
+      billedQuantity: item.billedQuantity,
+      rentalDuration,
+    });
+    const totalDeposit = item.deposit * priced.stockQuantity;
 
-    subtotalAmount += totalPrice;
+    subtotalAmount += priced.total;
     depositAmount += totalDeposit;
 
     return {
       name: item.name,
       description: item.description,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice.toFixed(2),
+      quantity: priced.stockQuantity,
+      unitPrice: priced.rate.toFixed(2),
       depositPerUnit: item.deposit.toFixed(2),
-      totalPrice: totalPrice.toFixed(2),
+      totalPrice: priced.total.toFixed(2),
+      chargeKind: priced.chargeKind,
+      billedQuantity: priced.billedQuantity,
       pricingBreakdown: {
-        basePrice: item.unitPrice,
-        effectivePrice: item.unitPrice,
-        duration,
+        basePrice: priced.rate,
+        effectivePrice: priced.rate,
+        duration: priced.duration,
         pricingMode: item.pricingMode,
+        pricingKind: priced.chargeKind === "duration" ? "duration" : "fixed",
+        chargeKind: priced.chargeKind,
+        ...(priced.billedQuantity != null ? { billedQuantity: priced.billedQuantity } : {}),
         discountPercent: null,
         discountAmount: 0,
         tierApplied: null,
@@ -1417,7 +1446,41 @@ export async function createManualReservation(data: CreateReservationData) {
   ) {
     depositAmount = data.depositOverride;
   }
-  const totalAmount = subtotalAmount - manualDiscountAmount + deliveryFeeAmount;
+  const quoteTax = buildDashboardQuoteTax({
+    lines: [
+      ...productDetails.map((detail, index) => ({
+        id: `catalog:${index}`,
+        amount: Number(detail.totalPrice),
+        taxRate: quoteLineTaxRate(store.settings?.tax, readProductTaxSettings(detail.product.taxSettings)),
+        quantity: detail.quantity,
+        unitRate: Number(detail.unitPrice),
+      })),
+      ...customItemDetails.map((detail, index) => ({
+        id: `custom:${index}`,
+        amount: Number(detail.totalPrice),
+        taxRate: quoteLineTaxRate(store.settings?.tax, null),
+        quantity: detail.quantity,
+        unitRate: Number(detail.unitPrice),
+      })),
+      ...(tulipInsuranceAmount > 0
+        ? [
+            {
+              id: "insurance",
+              amount: tulipInsuranceAmount,
+              taxRate: null,
+              quantity: 1,
+              unitRate: tulipInsuranceAmount,
+            },
+          ]
+        : []),
+    ],
+    deliveryFee: deliveryFeeAmount,
+    discountAmount: manualDiscountAmount,
+    depositAmount,
+    taxSettings: store.settings?.tax,
+  });
+  const quoteTaxById = new Map(quoteTax.lines.map((line) => [line.id, line]));
+  const totalAmount = quoteTax.totalAmount;
 
   // Create reservation
   const reservationId = nanoid();
@@ -1717,6 +1780,9 @@ export async function createManualReservation(data: CreateReservationData) {
       subtotalAmount: subtotalAmount.toFixed(2),
       depositAmount: depositAmount.toFixed(2),
       totalAmount: totalAmount.toFixed(2),
+      subtotalExclTax: quoteTax.subtotalExclTax?.toFixed(2) ?? null,
+      taxAmount: quoteTax.taxAmount?.toFixed(2) ?? null,
+      taxRate: quoteTax.taxRate?.toFixed(2) ?? null,
       discountAmount: manualDiscountAmount.toFixed(2),
       internalNotes: data.internalNotes || null,
       source: "manual",
@@ -1755,7 +1821,8 @@ export async function createManualReservation(data: CreateReservationData) {
     });
 
     // Create reservation items for catalog products
-    for (const detail of productDetails) {
+    for (const [index, detail] of productDetails.entries()) {
+      const lineTax = quoteTaxById.get(`catalog:${index}`);
       await tx.insert(reservationItems).values({
         reservationId,
         productId: detail.product.id,
@@ -1764,7 +1831,13 @@ export async function createManualReservation(data: CreateReservationData) {
         unitPrice: detail.unitPrice,
         depositPerUnit: detail.depositPerUnit,
         totalPrice: detail.totalPrice,
-        pricingBreakdown: detail.pricingBreakdown,
+        taxRate: lineTax?.taxRate ?? null,
+        taxAmount: lineTax?.taxAmount ?? null,
+        priceExclTax: lineTax?.priceExclTax ?? null,
+        totalExclTax: lineTax?.totalExclTax ?? null,
+        pricingBreakdown: lineTax
+          ? { ...detail.pricingBreakdown, ...lineTax.breakdownTax }
+          : detail.pricingBreakdown,
         combinationKey: detail.combinationKey,
         selectedAttributes: detail.selectedAttributes,
         productSnapshot: {
@@ -1778,7 +1851,8 @@ export async function createManualReservation(data: CreateReservationData) {
     }
 
     // Create reservation items for custom items
-    for (const customItem of customItemDetails) {
+    for (const [index, customItem] of customItemDetails.entries()) {
+      const lineTax = quoteTaxById.get(`custom:${index}`);
       await tx.insert(reservationItems).values({
         reservationId,
         productId: null,
@@ -1787,7 +1861,13 @@ export async function createManualReservation(data: CreateReservationData) {
         unitPrice: customItem.unitPrice,
         depositPerUnit: customItem.depositPerUnit,
         totalPrice: customItem.totalPrice,
-        pricingBreakdown: customItem.pricingBreakdown,
+        taxRate: lineTax?.taxRate ?? null,
+        taxAmount: lineTax?.taxAmount ?? null,
+        priceExclTax: lineTax?.priceExclTax ?? null,
+        totalExclTax: lineTax?.totalExclTax ?? null,
+        pricingBreakdown: lineTax
+          ? { ...customItem.pricingBreakdown, ...lineTax.breakdownTax }
+          : customItem.pricingBreakdown,
         productSnapshot: {
           name: customItem.name,
           description: customItem.description,
@@ -2113,6 +2193,8 @@ interface UpdateReservationItem {
   depositPerUnit: number;
   isManualPrice?: boolean;
   pricingMode?: PricingMode;
+  chargeKind?: QuoteChargeKind;
+  billedQuantity?: number;
   productSnapshot: {
     name: string;
     description?: string | null;
@@ -2177,7 +2259,13 @@ type ReservationItemUpdateValues = Pick<
   | "depositPerUnit"
   | "totalPrice"
   | "pricingBreakdown"
->;
+> &
+  Partial<
+    Pick<
+      ReservationItemInsertValues,
+      "taxRate" | "taxAmount" | "priceExclTax" | "totalExclTax"
+    >
+  >;
 
 type ReservationItemWrite =
   | { type: "insert"; values: ReservationItemInsertValues }
@@ -2186,6 +2274,12 @@ type ReservationItemWrite =
 function normalizeMoney(value: string | number) {
   const parsed = typeof value === "number" ? value : parseFloat(value);
   return Number.isFinite(parsed) ? parsed.toFixed(2) : "0.00";
+}
+
+function normalizeOptionalMoney(value: string | number | null | undefined) {
+  if (value == null || value === "") return null;
+  const parsed = typeof value === "number" ? value : parseFloat(value);
+  return Number.isFinite(parsed) ? parsed.toFixed(2) : null;
 }
 
 function hasReservationItemChanges(
@@ -2197,9 +2291,20 @@ function hasReservationItemChanges(
     depositPerUnit: string;
     totalPrice: string;
     pricingBreakdown: PricingBreakdown | null;
+    taxRate?: string | null;
+    taxAmount?: string | null;
+    priceExclTax?: string | null;
+    totalExclTax?: string | null;
   },
   next: ReservationItemUpdateValues,
 ) {
+  const taxChanged =
+    next.taxRate !== undefined &&
+    (normalizeOptionalMoney(current.taxRate) !== normalizeOptionalMoney(next.taxRate) ||
+      normalizeOptionalMoney(current.taxAmount) !== normalizeOptionalMoney(next.taxAmount) ||
+      normalizeOptionalMoney(current.priceExclTax) !== normalizeOptionalMoney(next.priceExclTax) ||
+      normalizeOptionalMoney(current.totalExclTax) !== normalizeOptionalMoney(next.totalExclTax));
+
   return (
     current.productId !== next.productId ||
     current.isCustomItem !== next.isCustomItem ||
@@ -2207,7 +2312,8 @@ function hasReservationItemChanges(
     normalizeMoney(current.unitPrice) !== normalizeMoney(next.unitPrice) ||
     normalizeMoney(current.depositPerUnit) !== normalizeMoney(next.depositPerUnit) ||
     normalizeMoney(current.totalPrice) !== normalizeMoney(next.totalPrice) ||
-    JSON.stringify(current.pricingBreakdown) !== JSON.stringify(next.pricingBreakdown)
+    JSON.stringify(current.pricingBreakdown) !== JSON.stringify(next.pricingBreakdown) ||
+    taxChanged
   );
 }
 
@@ -2669,6 +2775,12 @@ export async function updateReservation(
       let duration = calculateDuration(newStartDate, newEndDate, itemPricingMode);
       let totalPrice = item.unitPrice * duration * item.quantity;
       let manualPricingKind: PricingKind = "duration";
+      let stockQuantity = item.quantity;
+      let billedQuantity: number | null = null;
+      const existingBreakdown = item.id
+        ? existingItemsById.get(item.id)?.pricingBreakdown
+        : undefined;
+      let customChargeKind: QuoteChargeKind = "duration";
 
       if (item.isManualPrice && item.productId) {
         const manualPriceProduct = await db.query.products.findFirst({
@@ -2677,13 +2789,40 @@ export async function updateReservation(
         });
         // The product may have been deleted since the reservation was created;
         // the stored breakdown keeps the kind so the manual price stays editable.
-        const existingBreakdown = item.id
-          ? existingItemsById.get(item.id)?.pricingBreakdown
-          : undefined;
         manualPricingKind =
           manualPriceProduct?.pricingKind ?? toPricingKind(existingBreakdown?.pricingKind);
         duration = manualPricingKind === "fixed" ? 1 : duration;
         totalPrice = item.unitPrice * duration * item.quantity;
+      }
+
+      if (!item.productId) {
+        customChargeKind = readQuoteChargeKind(item.chargeKind ?? existingBreakdown?.chargeKind);
+        if (customChargeKind !== "duration") {
+          const kilometres =
+            item.billedQuantity ??
+            (typeof existingBreakdown?.billedQuantity === "number"
+              ? existingBreakdown.billedQuantity
+              : undefined);
+          if (customChargeKind === "distance" && !(kilometres != null && kilometres > 0)) {
+            return { error: "errors.invalidData" };
+          }
+          if (item.unitPrice < 0) {
+            return { error: "errors.invalidData" };
+          }
+          const priced = priceQuoteCharge({
+            chargeKind: customChargeKind,
+            rate: item.unitPrice,
+            quantity: item.quantity,
+            billedQuantity: kilometres,
+            rentalDuration: duration,
+          });
+          duration = priced.duration;
+          totalPrice = priced.total;
+          finalUnitPrice = priced.rate;
+          stockQuantity = priced.stockQuantity;
+          billedQuantity = priced.billedQuantity;
+          manualPricingKind = "fixed";
+        }
       }
 
       // If not manual price and has a productId, calculate with tiers
@@ -2760,11 +2899,14 @@ export async function updateReservation(
         }
       } else if (item.isManualPrice) {
         pricingBreakdown = {
-          basePrice: item.unitPrice,
-          effectivePrice: item.unitPrice,
+          ...(existingBreakdown ?? {}),
+          basePrice: finalUnitPrice,
+          effectivePrice: finalUnitPrice,
           duration,
           pricingMode: itemPricingMode,
           pricingKind: manualPricingKind,
+          ...(!item.productId ? { chargeKind: customChargeKind } : {}),
+          ...(billedQuantity != null ? { billedQuantity } : {}),
           discountPercent: null,
           discountAmount: 0,
           tierApplied: null,
@@ -2773,22 +2915,23 @@ export async function updateReservation(
           subtotalExclTax: null,
           subtotalInclTax: null,
           isManualOverride: true,
+          originalPrice: existingBreakdown?.originalPrice,
         };
       }
 
-      const itemDeposit = item.depositPerUnit * item.quantity;
+      const itemDeposit = item.depositPerUnit * stockQuantity;
       newSubtotalAmount += totalPrice;
       newDepositAmount += itemDeposit;
       if (item.productId) {
         insuranceQuoteItems.push({
           productId: item.productId,
-          quantity: item.quantity,
+          quantity: stockQuantity,
         });
       }
       const itemValues = {
         productId: item.productId || null,
         isCustomItem: !item.productId,
-        quantity: item.quantity,
+        quantity: stockQuantity,
         unitPrice: finalUnitPrice.toFixed(2),
         depositPerUnit: item.depositPerUnit.toFixed(2),
         totalPrice: totalPrice.toFixed(2),
@@ -2942,6 +3085,7 @@ export async function updateReservation(
         }
       } else {
         // Manual overrides on fixed products stay independent of rental dates.
+        // One-off and distance lines also stay put when only the hire span changes.
         const fallbackPricingMode = toPricingMode(pricingBreakdown?.pricingMode);
         let manualPricingKind = toPricingKind(pricingBreakdown?.pricingKind);
         if (item.productId) {
@@ -2951,17 +3095,33 @@ export async function updateReservation(
           });
           manualPricingKind = manualPriceProduct?.pricingKind ?? manualPricingKind;
         }
-        const itemDuration =
-          manualPricingKind === "fixed"
-            ? 1
-            : calculateDuration(newStartDate, newEndDate, fallbackPricingMode);
-        totalPrice = finalUnitPrice * itemDuration * item.quantity;
+        const storedChargeKind = !item.productId
+          ? readQuoteChargeKind(pricingBreakdown?.chargeKind)
+          : "duration";
+        const rentalDuration = calculateDuration(newStartDate, newEndDate, fallbackPricingMode);
+        const itemDuration = manualPricingKind === "fixed" ? 1 : rentalDuration;
+        const priced =
+          storedChargeKind === "duration"
+            ? null
+            : priceQuoteCharge({
+                chargeKind: storedChargeKind,
+                rate: finalUnitPrice,
+                quantity: item.quantity,
+                billedQuantity:
+                  typeof pricingBreakdown?.billedQuantity === "number"
+                    ? pricingBreakdown.billedQuantity
+                    : undefined,
+                rentalDuration,
+              });
+        totalPrice = priced ? priced.total : finalUnitPrice * itemDuration * item.quantity;
         const nextPricingBreakdown = item.pricingBreakdown
           ? {
               ...item.pricingBreakdown,
-              duration: itemDuration,
+              duration: priced ? priced.duration : itemDuration,
               pricingMode: fallbackPricingMode,
-              pricingKind: manualPricingKind,
+              pricingKind: priced ? "fixed" : manualPricingKind,
+              ...(!item.productId ? { chargeKind: storedChargeKind } : {}),
+              ...(priced?.billedQuantity != null ? { billedQuantity: priced.billedQuantity } : {}),
             }
           : null;
         const itemValues = {
@@ -3264,9 +3424,135 @@ export async function updateReservation(
     deliveryUpdateFields.deliveryOption = hasAddressLeg ? "delivery" : "pickup";
   }
 
-  // Calculate total: subtotal + delivery fee - discount
+  // VAT uses the store rate. One-off and distance lines are included once.
+  // Deposits stay outside the total. A null rate, used for breakage insurance,
+  // is not taxed.
   const existingDiscount = parseFloat(reservation.discountAmount || "0");
-  const newTotalAmount = newSubtotalAmount + deliveryFee - existingDiscount;
+  const removedIds = new Set([...removedReservationItemIds, ...extraInsuranceItemIdsToDelete]);
+  const updatesById = new Map(
+    [...itemWrites, ...insuranceItemWrites].flatMap((write) =>
+      write.type === "update" ? [[write.id, write] as const] : [],
+    ),
+  );
+  const quoteLineDrafts: Array<{
+    id: string;
+    amount: number;
+    quantity: number;
+    unitRate: number;
+    productId: string | null;
+    exempt: boolean;
+  }> = [];
+
+  for (const item of reservation.items) {
+    if (removedIds.has(item.id)) continue;
+    const update = updatesById.get(item.id);
+    const productId = update ? (update.values.productId ?? null) : item.productId;
+    quoteLineDrafts.push({
+      id: item.id,
+      amount: Number(update?.values.totalPrice ?? item.totalPrice),
+      quantity: update?.values.quantity ?? item.quantity,
+      unitRate: Number(update?.values.unitPrice ?? item.unitPrice),
+      productId,
+      exempt: isLegacyTulipInsuranceItem({
+        isCustomItem: productId == null,
+        productSnapshot: item.productSnapshot,
+      }),
+    });
+  }
+
+  for (const write of [...itemWrites, ...insuranceItemWrites]) {
+    if (write.type !== "insert" || !write.values.id) continue;
+    quoteLineDrafts.push({
+      id: write.values.id,
+      amount: Number(write.values.totalPrice),
+      quantity: write.values.quantity,
+      unitRate: Number(write.values.unitPrice),
+      productId: write.values.productId ?? null,
+      exempt: isLegacyTulipInsuranceItem({
+        isCustomItem: true,
+        productSnapshot: write.values.productSnapshot,
+      }),
+    });
+  }
+
+  const taxProductIds = [
+    ...new Set(quoteLineDrafts.flatMap((line) => (line.productId ? [line.productId] : []))),
+  ];
+  const taxProducts =
+    taxProductIds.length > 0
+      ? await db.query.products.findMany({
+          where: and(eq(products.storeId, store.id), inArray(products.id, taxProductIds)),
+          columns: { id: true, taxSettings: true },
+        })
+      : [];
+  const taxSettingsByProductId = new Map(
+    taxProducts.map((product) => [product.id, readProductTaxSettings(product.taxSettings)]),
+  );
+  const quoteTax = buildDashboardQuoteTax({
+    lines: quoteLineDrafts.map((line) => ({
+      id: line.id,
+      amount: line.amount,
+      quantity: line.quantity,
+      unitRate: line.unitRate,
+      taxRate: line.exempt
+        ? null
+        : quoteLineTaxRate(
+            store.settings?.tax,
+            line.productId ? (taxSettingsByProductId.get(line.productId) ?? null) : null,
+          ),
+    })),
+    deliveryFee,
+    discountAmount: existingDiscount,
+    depositAmount: newDepositAmount,
+    taxSettings: store.settings?.tax,
+  });
+  const quoteTaxById = new Map(quoteTax.lines.map((line) => [line.id, line]));
+  const newTotalAmount = quoteTax.totalAmount;
+
+  if (quoteTax.taxEnabled) {
+    const applyLineTax = (values: ReservationItemUpdateValues, lineId: string) => {
+      const lineTax = quoteTaxById.get(lineId);
+      if (!lineTax) return;
+      values.taxRate = lineTax.taxRate;
+      values.taxAmount = lineTax.taxAmount;
+      values.priceExclTax = lineTax.priceExclTax;
+      values.totalExclTax = lineTax.totalExclTax;
+      if (values.pricingBreakdown) {
+        values.pricingBreakdown = { ...values.pricingBreakdown, ...lineTax.breakdownTax };
+      }
+    };
+
+    for (const write of itemWrites) {
+      applyLineTax(write.values, write.type === "insert" ? (write.values.id ?? "") : write.id);
+    }
+    for (const write of insuranceItemWrites) {
+      applyLineTax(write.values, write.type === "insert" ? (write.values.id ?? "") : write.id);
+    }
+
+    for (const item of reservation.items) {
+      if (removedIds.has(item.id) || updatesById.has(item.id)) continue;
+      const lineTax = quoteTaxById.get(item.id);
+      if (!lineTax) continue;
+      const values = {
+        productId: item.productId,
+        isCustomItem: item.isCustomItem,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        depositPerUnit: item.depositPerUnit,
+        totalPrice: item.totalPrice,
+        pricingBreakdown: item.pricingBreakdown
+          ? { ...item.pricingBreakdown, ...lineTax.breakdownTax }
+          : item.pricingBreakdown,
+        taxRate: lineTax.taxRate,
+        taxAmount: lineTax.taxAmount,
+        priceExclTax: lineTax.priceExclTax,
+        totalExclTax: lineTax.totalExclTax,
+      } satisfies ReservationItemUpdateValues;
+      if (hasReservationItemChanges(item, values)) {
+        itemWrites.push({ type: "update", id: item.id, values });
+      }
+    }
+  }
   const difference = newTotalAmount - previousState.totalAmount;
   const dateChanged =
     newStartDate.getTime() !== reservation.startDate.getTime() ||
@@ -3612,6 +3898,9 @@ export async function updateReservation(
             subtotalAmount: newSubtotalAmount.toFixed(2),
             depositAmount: newDepositAmount.toFixed(2),
             totalAmount: newTotalAmount.toFixed(2),
+            subtotalExclTax: quoteTax.subtotalExclTax?.toFixed(2) ?? null,
+            taxAmount: quoteTax.taxAmount?.toFixed(2) ?? null,
+            taxRate: quoteTax.taxRate?.toFixed(2) ?? null,
             tulipInsuranceOptIn: nextTulipInsuranceOptIn,
             tulipInsuranceAmount:
               nextTulipInsuranceAmount && nextTulipInsuranceAmount > 0

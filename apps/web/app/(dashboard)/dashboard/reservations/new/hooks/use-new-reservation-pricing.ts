@@ -8,6 +8,7 @@ import {
   calculateSeasonalAwarePrice,
   findApplicableTier,
   isRateBasedProduct,
+  priceQuoteCharge,
 } from "@louez/utils";
 import { getDetailedDuration } from "@/lib/utils/duration";
 
@@ -273,15 +274,22 @@ export function useNewReservationPricing({
 
   const getCustomItemTotal = useCallback(
     (item: CustomItem) => {
-      if (!startDate || !endDate) {
+      const chargeKind = item.chargeKind ?? "duration";
+      if (chargeKind === "duration" && (!startDate || !endDate)) {
         return 0;
       }
 
-      return (
-        item.unitPrice *
-        item.quantity *
-        calculateDurationForMode(startDate, endDate, item.pricingMode)
-      );
+      const rentalDuration =
+        startDate && endDate
+          ? calculateDurationForMode(startDate, endDate, item.pricingMode)
+          : 1;
+      return priceQuoteCharge({
+        chargeKind,
+        rate: item.unitPrice,
+        quantity: chargeKind === "distance" ? 1 : item.quantity,
+        billedQuantity: item.billedQuantity,
+        rentalDuration,
+      }).total;
     },
     [calculateDurationForMode, endDate, startDate],
   );
@@ -308,11 +316,10 @@ export function useNewReservationPricing({
     }
 
     for (const item of customItems) {
-      const itemDuration = calculateDurationForMode(startDate, endDate, item.pricingMode);
-      const itemTotal = item.unitPrice * itemDuration * item.quantity;
+      const itemTotal = getCustomItemTotal(item);
       subtotalAmount += itemTotal;
       originalAmount += itemTotal;
-      depositAmount += item.deposit * item.quantity;
+      depositAmount += item.deposit * (item.chargeKind === "distance" ? 1 : item.quantity);
     }
 
     return {
@@ -326,6 +333,7 @@ export function useNewReservationPricing({
     customItems,
     duration,
     endDate,
+    getCustomItemTotal,
     getProductPricingDetails,
     hasItems,
     products,

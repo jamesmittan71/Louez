@@ -252,6 +252,7 @@ export default async function NewReservationPage({
         storeLatitude={store.latitude ? parseFloat(store.latitude) : null}
         storeLongitude={store.longitude ? parseFloat(store.longitude) : null}
         storeAddress={store.address}
+        taxSettings={store.settings?.tax}
         storeLocations={[
           {
             id: null,

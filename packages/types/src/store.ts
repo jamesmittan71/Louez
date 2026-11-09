@@ -527,6 +527,13 @@ export interface PricingBreakdown {
   // Manual price override fields
   isManualOverride?: boolean;
   originalPrice?: number; // Price before manual override
+  /**
+   * Dashboard quote line. Missing means the historical duration line.
+   * `once` is a job fee. `distance` is kilometres times a rate.
+   * `billedQuantity` is the kilometre count and is not stock.
+   */
+  chargeKind?: "duration" | "once" | "distance";
+  billedQuantity?: number;
   // Seasonal pricing breakdown
   seasonalSegments?: Array<{
     seasonalPricingId: string | null;

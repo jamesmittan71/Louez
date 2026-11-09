@@ -5,6 +5,7 @@ import type {
   InvoiceSellerSnapshot,
   InvoiceVatBreakdownSnapshot,
 } from "@louez/types";
+import { presentCommercialLine } from "@louez/utils";
 
 export type InvoiceSeries = "invoice" | "credit_note";
 
@@ -28,7 +29,14 @@ interface SnapshotItem {
   taxAmount: string | null;
   priceExclTax: string | null;
   totalExclTax: string | null;
-  productSnapshot: { name: string };
+  productSnapshot: { name: string; description?: string | null };
+  pricingBreakdown?: {
+    chargeKind?: string;
+    duration?: number;
+    billedQuantity?: number | null;
+    isManualOverride?: boolean;
+    pricingKind?: string;
+  } | null;
 }
 
 interface SnapshotStore {
@@ -375,11 +383,24 @@ function buildFullInvoiceLines(source: BuildInvoiceSnapshotsSource): InvoiceLine
 
     persistedItemExclTaxCents += persistedExclTaxCents;
     persistedItemTaxCents += persistedTaxCents;
+    const presentation = presentCommercialLine({
+      name: item.productSnapshot.name,
+      description: item.productSnapshot.description,
+      chargeKind: item.pricingBreakdown?.chargeKind,
+      isManualOverride: item.pricingBreakdown?.isManualOverride === true,
+      isCustomItem: item.productId === null,
+      pricingKind: item.pricingBreakdown?.pricingKind,
+      storedQuantity: item.quantity,
+      total: Number(item.totalPrice),
+      duration: item.pricingBreakdown?.duration,
+      billedQuantity: item.pricingBreakdown?.billedQuantity,
+      amountExclTax: gross.exclTaxCents / 100,
+    });
     lines.push(
       createLine({
         id: item.id,
-        description: item.productSnapshot.name,
-        quantity: item.quantity,
+        description: presentation.description,
+        quantity: presentation.quantity,
         exclTaxCents: gross.exclTaxCents,
         taxCents: gross.taxCents,
         taxRate: item.taxRate,

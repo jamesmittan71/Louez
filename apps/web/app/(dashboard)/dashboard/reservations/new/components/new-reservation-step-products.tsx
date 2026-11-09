@@ -871,12 +871,17 @@ export function NewReservationStepProducts({
                           </Badge>
                         </div>
                         <p className="text-muted-foreground mt-0.5 text-sm">
-                          {formatCurrency(item.unitPrice)}/
-                          {item.pricingMode === "hour"
-                            ? t("perHour")
-                            : item.pricingMode === "week"
-                              ? "week"
-                              : t("perDay")}
+                          {item.chargeKind === "distance"
+                            ? `${formatCurrency(item.unitPrice)} / km`
+                            : item.chargeKind === "once"
+                              ? t("customItem.chargeKindOnce")
+                              : `${formatCurrency(item.unitPrice)}/${
+                                  item.pricingMode === "hour"
+                                    ? t("perHour")
+                                    : item.pricingMode === "week"
+                                      ? "week"
+                                      : t("perDay")
+                                }`}
                         </p>
                         {item.description && (
                           <p className="text-muted-foreground mt-1 line-clamp-2 text-xs">
@@ -894,7 +899,9 @@ export function NewReservationStepProducts({
                         >
                           <Minus className="h-3 w-3" />
                         </Button>
-                        <span className="w-8 text-center font-medium">{item.quantity}</span>
+                        <span className="w-8 text-center font-medium">
+                          {item.chargeKind === "distance" ? item.billedQuantity : item.quantity}
+                        </span>
                         <Button
                           type="button"
                           variant="outline"
@@ -915,16 +922,26 @@ export function NewReservationStepProducts({
                         </Button>
                       </div>
                     </div>
-                    {startDate && endDate && (
+                    {(item.chargeKind === "once" ||
+                      item.chargeKind === "distance" ||
+                      (startDate && endDate)) && (
                       <div className="border-border mt-3 flex items-center justify-between border-t pt-3 text-sm">
                         <span className="text-muted-foreground">
-                          {item.quantity} ×{" "}
-                          {calculateDurationForMode(startDate, endDate, item.pricingMode)}{" "}
-                          {item.pricingMode === "hour"
-                            ? "h"
-                            : item.pricingMode === "week"
-                              ? "sem"
-                              : "j"}
+                          {item.chargeKind === "distance"
+                            ? `${item.billedQuantity ?? 0} km`
+                            : item.chargeKind === "once"
+                              ? t("customItem.chargeKindOnce")
+                              : `${item.quantity} × ${
+                                  startDate && endDate
+                                    ? calculateDurationForMode(startDate, endDate, item.pricingMode)
+                                    : 0
+                                } ${
+                                  item.pricingMode === "hour"
+                                    ? "h"
+                                    : item.pricingMode === "week"
+                                      ? "sem"
+                                      : "j"
+                                }`}
                         </span>
                         <span className="font-medium">
                           {formatCurrency(getCustomItemTotal(item))}

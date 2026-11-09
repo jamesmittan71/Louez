@@ -23,6 +23,10 @@ interface EditReservationSummarySectionProps {
   onNotifyCustomerByEmailChange: (checked: boolean) => void
   hasScheduleChanges: boolean
   onSave: () => void
+  taxAmount?: number | null
+  taxDisplayMode?: 'inclusive' | 'exclusive' | null
+  chargedTotal?: number
+  originalChargedTotal?: number
 }
 
 export function EditReservationSummarySection({
@@ -40,11 +44,15 @@ export function EditReservationSummarySection({
   onNotifyCustomerByEmailChange,
   hasScheduleChanges,
   onSave,
+  taxAmount = null,
+  taxDisplayMode = null,
+  chargedTotal,
+  originalChargedTotal,
 }: EditReservationSummarySectionProps) {
   const t = useTranslations('dashboard.reservations')
 
-  const newTotal = calculations.subtotal + deliveryFee
-  const originalTotal = originalSubtotal + originalDeliveryFee
+  const newTotal = chargedTotal ?? calculations.subtotal + deliveryFee
+  const originalTotal = originalChargedTotal ?? originalSubtotal + originalDeliveryFee
   const difference = newTotal - originalTotal
 
   const scrollToFirstConflict = () => {
@@ -109,6 +117,18 @@ export function EditReservationSummarySection({
                     {currencySymbol}
                   </>
                 )}
+              </span>
+            </div>
+          )}
+
+          {taxAmount != null && taxAmount > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">
+                {taxDisplayMode === 'inclusive' ? t('edit.vatIncluded') : t('edit.vat')}
+              </span>
+              <span>
+                {taxAmount.toFixed(2)}
+                {currencySymbol}
               </span>
             </div>
           )}
