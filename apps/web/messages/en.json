@@ -2346,6 +2346,8 @@
         "insuranceLine": "Breakage/theft coverage",
         "insuranceEstimating": "Calculating...",
         "difference": "Difference",
+        "vat": "VAT",
+        "vatIncluded": "VAT included",
         "deposit": "Deposit",
         "save": "Save",
         "saved": "Reservation updated",
@@ -2454,6 +2456,8 @@
         "subtotal": "Subtotal",
         "deposit": "Deposit",
         "total": "Total",
+        "vat": "VAT",
+        "vatIncluded": "VAT included",
         "tulipInsurance": {
           "title": "Tulip insurance",
           "appliesMappedProducts": "Applies only to products mapped to Tulip.",
@@ -2568,7 +2572,14 @@
           "addButton": "Add",
           "nameRequired": "Please enter a name for the item",
           "priceRequired": "Please enter a valid price",
-          "added": "Custom item added"
+          "added": "Custom item added",
+          "chargeKind": "How this line is billed",
+          "chargeKindDuration": "Hire rate for the reservation period",
+          "chargeKindOnce": "One-off fee",
+          "chargeKindDistance": "Distance charge",
+          "chargeKindOnceHint": "Charged once for this job. The hire length does not repeat it.",
+          "chargeKindDistanceHint": "Kilometres times the rate you enter. This is not stock and the hire length does not multiply it.",
+          "kilometres": "Kilometres"
         },
         "priceOverride": {
           "dialogTitle": "Edit price",

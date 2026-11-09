@@ -168,6 +168,7 @@ interface ReservationItem {
   quantity: number;
   unitPrice: string;
   totalPrice: string;
+  note?: string | null;
   assignedUnitIdentifiers?: string[];
   /** The breakage/theft coverage of the reservation applies to this line. */
   insured?: boolean;
@@ -467,6 +468,7 @@ export function ContractDocument({
               >
                 <View style={[styles.tableCell, styles.tableCellName]}>
                   <Text>{item.productSnapshot.name}</Text>
+                  {item.note ? <Text style={styles.unitIdentifiers}>{item.note}</Text> : null}
                   {item.assignedUnitIdentifiers && item.assignedUnitIdentifiers.length > 0 && (
                     <Text style={styles.unitIdentifiers}>
                       {t.table.unitIdentifiers

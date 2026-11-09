@@ -2390,7 +2390,9 @@
           "tooFar": "住所が最大距離 ({maxDistance} km) を超えています",
           "savings": "貯蓄",
           "deliveryFee": "配送料"
-        }
+        },
+        "vat": "VAT",
+        "vatIncluded": "VAT included"
       },
       "contract": {
         "title": "契約書",
@@ -2568,7 +2570,14 @@
           "addButton": "追加",
           "nameRequired": "アイテムの名前を入力してください",
           "priceRequired": "有効な価格を入力してください",
-          "added": "カスタムアイテムが追加されました"
+          "added": "カスタムアイテムが追加されました",
+          "chargeKind": "How this line is billed",
+          "chargeKindDuration": "Hire rate for the reservation period",
+          "chargeKindOnce": "One-off fee",
+          "chargeKindDistance": "Distance charge",
+          "chargeKindOnceHint": "Charged once for this job. The hire length does not repeat it.",
+          "chargeKindDistanceHint": "Kilometres times the rate you enter. This is not stock and the hire length does not multiply it.",
+          "kilometres": "Kilometres"
         },
         "priceOverride": {
           "dialogTitle": "価格を編集する",
@@ -2625,7 +2634,9 @@
           "label": "割引",
           "add": "割引を追加する",
           "remove": "割引を削除する"
-        }
+        },
+        "vat": "VAT",
+        "vatIncluded": "VAT included"
       },
       "rejectDialog": {
         "title": "リクエストを拒否する",

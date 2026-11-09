@@ -36,7 +36,13 @@ import {
   DialogTitle,
 } from "@louez/ui";
 import { Label } from "@louez/ui";
-import { cn, formatCurrency } from "@louez/utils";
+import {
+  buildDashboardQuoteTax,
+  cn,
+  formatCurrency,
+  quoteLineTaxRate,
+  readProductTaxSettings,
+} from "@louez/utils";
 
 import { invalidateReservationList } from "@/lib/orpc/invalidation";
 import { trackOpenReplayEvent } from "@/lib/openreplay/client";
@@ -139,6 +145,7 @@ export function NewReservationForm({
   storeLongitude,
   storeAddress,
   storeLocations,
+  taxSettings,
 }: NewReservationFormProps & { onReservationCreated: () => void }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -194,6 +201,7 @@ export function NewReservationForm({
     deposit: "",
     quantity: "1",
     pricingMode: "day" as PricingMode,
+    chargeKind: "duration" as "duration" | "once" | "distance",
   });
   const [priceInputMode, setPriceInputMode] = useState<"unit" | "total">("total");
   const [sendConfirmationEmail, setSendConfirmationEmail] = useState(true);
@@ -397,8 +405,10 @@ export function NewReservationForm({
             description: item.description,
             unitPrice: item.unitPrice,
             deposit: item.deposit,
-            quantity: item.quantity,
+            quantity: item.chargeKind === "distance" ? 1 : item.quantity,
             pricingMode: item.pricingMode,
+            chargeKind: item.chargeKind ?? "duration",
+            billedQuantity: item.chargeKind === "distance" ? item.billedQuantity : undefined,
           })),
           delivery: {
             outbound:
@@ -1017,6 +1027,7 @@ export function NewReservationForm({
       deposit: "",
       quantity: "1",
       pricingMode: "day",
+      chargeKind: "duration",
     });
   };
 
@@ -1024,21 +1035,23 @@ export function NewReservationForm({
     watchStartDate && watchEndDate
       ? calculateDurationForMode(watchStartDate, watchEndDate, customItemForm.pricingMode)
       : 0;
+  const customChargeMultiplier =
+    customItemForm.chargeKind === "duration" ? customItemDuration : 1;
 
   // Calculate unit price from total price
   const calculateUnitPriceFromTotal = (totalPrice: string, qty: string) => {
     const total = parseFloat(totalPrice);
-    const quantity = parseInt(qty) || 1;
-    if (isNaN(total) || total <= 0 || customItemDuration <= 0) return "";
-    return (total / (quantity * customItemDuration)).toFixed(2);
+    const quantity = parseFloat(qty) || 1;
+    if (isNaN(total) || total <= 0 || customChargeMultiplier <= 0) return "";
+    return (total / (quantity * customChargeMultiplier)).toFixed(2);
   };
 
   // Calculate total price from unit price
   const calculateTotalFromUnitPrice = (unitPrice: string, qty: string) => {
     const unit = parseFloat(unitPrice);
-    const quantity = parseInt(qty) || 1;
-    if (isNaN(unit) || unit <= 0 || customItemDuration <= 0) return "";
-    return (unit * quantity * customItemDuration).toFixed(2);
+    const quantity = parseFloat(qty) || 1;
+    if (isNaN(unit) || unit <= 0 || customChargeMultiplier <= 0) return "";
+    return (unit * quantity * customChargeMultiplier).toFixed(2);
   };
 
   // Handle unit price change
@@ -1083,28 +1096,32 @@ export function NewReservationForm({
   const handleAddCustomItem = () => {
     let unitPrice: number;
 
+    const chargeKind = customItemForm.chargeKind;
+    const enteredQuantity =
+      chargeKind === "distance"
+        ? parseFloat(customItemForm.quantity)
+        : parseInt(customItemForm.quantity, 10) || 1;
     if (priceInputMode === "total") {
       // Calculate unit price from total
       const totalPrice = parseFloat(customItemForm.totalPrice);
-      const quantity = parseInt(customItemForm.quantity) || 1;
-      if (isNaN(totalPrice) || totalPrice <= 0) {
+      if (isNaN(totalPrice) || totalPrice <= 0 || !(enteredQuantity > 0)) {
         toastManager.add({
           title: t("customItem.priceRequired"),
           type: "error",
         });
         return;
       }
-      if (customItemDuration <= 0) {
+      if (chargeKind === "duration" && customItemDuration <= 0) {
         toastManager.add({
           title: t("customItem.selectPeriodFirst"),
           type: "error",
         });
         return;
       }
-      unitPrice = totalPrice / (quantity * customItemDuration);
+      unitPrice = totalPrice / (enteredQuantity * customChargeMultiplier);
     } else {
       unitPrice = parseFloat(customItemForm.unitPrice);
-      if (isNaN(unitPrice) || unitPrice <= 0) {
+      if (isNaN(unitPrice) || unitPrice <= 0 || !(enteredQuantity > 0)) {
         toastManager.add({
           title: t("customItem.priceRequired"),
           type: "error",
@@ -1114,7 +1131,7 @@ export function NewReservationForm({
     }
 
     const deposit = parseFloat(customItemForm.deposit) || 0;
-    const quantity = parseInt(customItemForm.quantity) || 1;
+    const quantity = chargeKind === "distance" ? 1 : Math.max(1, Math.round(enteredQuantity));
 
     if (!customItemForm.name.trim()) {
       toastManager.add({ title: t("customItem.nameRequired"), type: "error" });
@@ -1130,6 +1147,8 @@ export function NewReservationForm({
       quantity,
       pricingMode: customItemForm.pricingMode,
       basePeriodMinutes: pricingModeToBasePeriodMinutes(customItemForm.pricingMode),
+      chargeKind,
+      billedQuantity: chargeKind === "distance" ? enteredQuantity : undefined,
     };
 
     setCustomItems([...customItems, newItem]);
@@ -1142,11 +1161,13 @@ export function NewReservationForm({
     setCustomItems(
       customItems
         .map((item) => {
-          if (item.id === id) {
-            const newQuantity = item.quantity + delta;
-            return newQuantity > 0 ? { ...item, quantity: newQuantity } : null;
+          if (item.id !== id) return item;
+          if (item.chargeKind === "distance") {
+            const next = Math.round(((item.billedQuantity ?? 0) + delta) * 1000) / 1000;
+            return next > 0 ? { ...item, quantity: 1, billedQuantity: next } : null;
           }
-          return item;
+          const newQuantity = item.quantity + delta;
+          return newQuantity > 0 ? { ...item, quantity: newQuantity } : null;
         })
         .filter(Boolean) as CustomItem[],
     );
@@ -1288,7 +1309,62 @@ export function NewReservationForm({
   );
 
   const effectiveDeposit = depositOverride ?? deposit;
-  const total = subtotal + tulipInsuranceAmount + delivery.totalFee - globalDiscountAmount;
+  const quoteTax = useMemo(
+    () =>
+      buildDashboardQuoteTax({
+        lines: [
+          ...selectedProducts.flatMap((item) => {
+            const product = products.find((entry) => entry.id === item.productId);
+            if (!product) return [];
+            const pricing = getProductPricingDetails(product, item);
+            return [
+              {
+                id: item.lineId,
+                amount: pricing.lineSubtotal,
+                taxRate: quoteLineTaxRate(taxSettings, readProductTaxSettings(product.taxSettings)),
+                quantity: item.quantity,
+                unitRate: pricing.effectivePrice,
+              },
+            ];
+          }),
+          ...customItems.map((item) => ({
+            id: item.id,
+            amount: getCustomItemTotal(item),
+            taxRate: quoteLineTaxRate(taxSettings, null),
+            quantity: item.chargeKind === "distance" ? 1 : item.quantity,
+            unitRate: item.unitPrice,
+          })),
+          ...(tulipInsuranceAmount > 0
+            ? [
+                {
+                  id: "insurance",
+                  amount: tulipInsuranceAmount,
+                  taxRate: null,
+                  quantity: 1,
+                  unitRate: tulipInsuranceAmount,
+                },
+              ]
+            : []),
+        ],
+        deliveryFee: delivery.totalFee,
+        discountAmount: globalDiscountAmount,
+        depositAmount: effectiveDeposit,
+        taxSettings,
+      }),
+    [
+      customItems,
+      delivery.totalFee,
+      effectiveDeposit,
+      getCustomItemTotal,
+      getProductPricingDetails,
+      globalDiscountAmount,
+      products,
+      selectedProducts,
+      taxSettings,
+      tulipInsuranceAmount,
+    ],
+  );
+  const total = quoteTax.totalAmount;
   const durationLabel = useReservationDurationLabel(detailedDuration, duration);
 
   const recapItemLines = useMemo(
@@ -1636,6 +1712,9 @@ export function NewReservationForm({
                 deposit={deposit}
                 discount={globalDiscount}
                 discountAmount={globalDiscountAmount}
+                taxAmount={quoteTax.taxEnabled ? quoteTax.taxAmount : null}
+                taxDisplayMode={quoteTax.taxEnabled ? quoteTax.displayMode : null}
+                chargedTotal={total}
                 onDiscountChange={setGlobalDiscount}
                 depositOverride={depositOverride}
                 onDepositOverrideChange={setDepositOverride}
@@ -1717,6 +1796,8 @@ export function NewReservationForm({
         tulipInsuranceAmount={tulipInsuranceAmount}
         deliveryFee={delivery.totalFee}
         discountAmount={globalDiscountAmount}
+        taxAmount={quoteTax.taxEnabled ? quoteTax.taxAmount : null}
+        taxDisplayMode={quoteTax.taxEnabled ? quoteTax.displayMode : null}
         deposit={effectiveDeposit}
         total={total}
         willSendConfirmationEmail={confirmDrawer.asQuote || sendConfirmationEmail}
@@ -1766,13 +1847,56 @@ export function NewReservationForm({
                   rows={2}
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="custom-charge-kind">{t("customItem.chargeKind")}</Label>
+                <Select
+                  value={customItemForm.chargeKind}
+                  onValueChange={(value) => {
+                    if (value !== "duration" && value !== "once" && value !== "distance") return;
+                    setCustomItemForm((prev) => ({ ...prev, chargeKind: value }));
+                  }}
+                >
+                  <SelectTrigger id="custom-charge-kind">
+                    <SelectValue>
+                      {customItemForm.chargeKind === "once"
+                        ? t("customItem.chargeKindOnce")
+                        : customItemForm.chargeKind === "distance"
+                          ? t("customItem.chargeKindDistance")
+                          : t("customItem.chargeKindDuration")}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="duration" label={t("customItem.chargeKindDuration")}>
+                      {t("customItem.chargeKindDuration")}
+                    </SelectItem>
+                    <SelectItem value="once" label={t("customItem.chargeKindOnce")}>
+                      {t("customItem.chargeKindOnce")}
+                    </SelectItem>
+                    <SelectItem value="distance" label={t("customItem.chargeKindDistance")}>
+                      {t("customItem.chargeKindDistance")}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                {customItemForm.chargeKind !== "duration" ? (
+                  <p className="text-muted-foreground text-xs">
+                    {customItemForm.chargeKind === "once"
+                      ? t("customItem.chargeKindOnceHint")
+                      : t("customItem.chargeKindDistanceHint")}
+                  </p>
+                ) : null}
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="custom-quantity">{t("customItem.quantity")}</Label>
+                  <Label htmlFor="custom-quantity">
+                    {customItemForm.chargeKind === "distance"
+                      ? t("customItem.kilometres")
+                      : t("customItem.quantity")}
+                  </Label>
                   <Input
                     id="custom-quantity"
                     type="number"
-                    min="1"
+                    min={customItemForm.chargeKind === "distance" ? "0.001" : "1"}
+                    step={customItemForm.chargeKind === "distance" ? "0.1" : "1"}
                     value={customItemForm.quantity}
                     onChange={(e) => handleCustomItemQuantityChange(e.target.value)}
                     className="w-full"
@@ -1802,6 +1926,7 @@ export function NewReservationForm({
                   </div>
                 </div>
               </div>
+              {customItemForm.chargeKind === "duration" ? (
               <div className="space-y-2">
                 <Label htmlFor="custom-pricing-mode">{t("customItem.pricingPeriod")}</Label>
                 <Select
@@ -1833,8 +1958,10 @@ export function NewReservationForm({
                   </SelectContent>
                 </Select>
               </div>
-              {customItemDuration > 0 && (
+              ) : null}
+              {(customItemForm.chargeKind !== "duration" || customItemDuration > 0) && (
                 <div className="bg-muted/30 space-y-3 rounded-lg border p-3">
+                  {customItemForm.chargeKind === "duration" ? (
                   <div className="text-muted-foreground flex items-center justify-between text-sm">
                     <span>{t("customItem.pricingPeriod")}</span>
                     <span className="text-foreground font-medium">
@@ -1847,6 +1974,13 @@ export function NewReservationForm({
                       × {customItemForm.quantity || 1} unité(s)
                     </span>
                   </div>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">
+                      {customItemForm.chargeKind === "distance"
+                        ? `${customItemForm.quantity || 0} km`
+                        : t("customItem.chargeKindOnce")}
+                    </p>
+                  )}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label htmlFor="custom-total" className="text-xs">
