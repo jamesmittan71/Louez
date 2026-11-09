@@ -14,7 +14,7 @@ All notable changes to Louez are documented here.
 
 ### 🧾 Quotes
 
-- 💶 **Dashboard quotes keep VAT, one-off fees, and distance charges** — A quote created in the dashboard stores the store's VAT split, so the quote, contract, and invoice show the same exclusive amount, VAT, and total. A one-off fee stays the amount entered for that job when the hire dates change. A distance line is kilometres times the rate entered for that job, and it does not reserve stock. Hire for the reservation span is still one duration line: the first and last day are not added a second time. A quote cannot keep both the store delivery fee and a distance line, because charging both is not configured.
+- 💶 **Dashboard quotes keep VAT, one-off fees, and distance charges** — A quote created in the dashboard stores the store's VAT split, so the quote, contract, and invoice show the same exclusive amount, VAT, and total. A one-off fee stays the amount entered for that job when the hire dates change. A distance line is kilometres times the rate entered for that job, and it does not reserve stock. Hire for the reservation span is still one duration line: the first and last day are not added a second time. A quote cannot keep both the store delivery fee and a distance line, because charging both is not configured. Fresh databases can store a quote: migration `0079` adds the `quote` and `declined` reservation statuses that the application already writes.
 
 ---
 
@@ -695,7 +695,7 @@ Toutes les évolutions notables de Louez sont documentées ici.
 
 ### 🧾 Devis
 
-- 💶 **Les devis du tableau de bord conservent la TVA, les frais uniques et le transport au kilomètre** — Un devis créé dans le tableau de bord enregistre la répartition de TVA de la boutique, de sorte que le devis, le contrat et la facture montrent le même montant hors taxe, la même TVA et le même total. Un frais unique reste le montant saisi pour ce travail quand les dates de location changent. Une ligne de distance est le nombre de kilomètres multiplié par le tarif saisi, et elle ne réserve pas de stock. La location de la période reste une seule ligne : le premier et le dernier jour ne sont pas ajoutés une seconde fois. Un devis ne peut pas conserver à la fois les frais de livraison de la boutique et une ligne au kilomètre, car les cumuler n'est pas configuré.
+- 💶 **Les devis du tableau de bord conservent la TVA, les frais uniques et le transport au kilomètre** — Un devis créé dans le tableau de bord enregistre la répartition de TVA de la boutique, de sorte que le devis, le contrat et la facture montrent le même montant hors taxe, la même TVA et le même total. Un frais unique reste le montant saisi pour ce travail quand les dates de location changent. Une ligne de distance est le nombre de kilomètres multiplié par le tarif saisi, et elle ne réserve pas de stock. La location de la période reste une seule ligne : le premier et le dernier jour ne sont pas ajoutés une seconde fois. Un devis ne peut pas conserver à la fois les frais de livraison de la boutique et une ligne au kilomètre, car les cumuler n'est pas configuré. Une base neuve peut enregistrer un devis : la migration `0079` ajoute les statuts `quote` et `declined`, que l'application écrivait déjà.
 
 ---
 
