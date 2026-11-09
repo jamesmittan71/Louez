@@ -29,7 +29,8 @@ const STUBS: Record<string, string> = {
   "@/lib/auth": "export async function auth() { return null; }\n",
   "@/lib/store-context": `export async function getCurrentStore() { return globalThis[${JSON.stringify(STORE_KEY)}] ?? null; }\n`,
   // A quote's email is sent without being awaited, and would outlive the database.
-  "@/lib/notifications/customer-dispatcher": "export async function dispatchCustomerNotification() {}\n",
+  "@/lib/notifications/customer-dispatcher":
+    "export async function dispatchCustomerNotification() {}\n",
 };
 const ACTIONS_FILE = "/dashboard/reservations/actions.ts";
 const FILES_SDK = new URL("../../../../node_modules/files-sdk/dist/", import.meta.url);
@@ -415,12 +416,22 @@ describe("dashboard reservation actions (database)", { skip: skipWithoutTestData
         Reflect.set(globalThis, STORE_KEY, previousStore);
       }
 
-      // The edit reprices the item before tax and adds no tax to the total.
+      // The edit stores the before-tax subtotal and the same VAT split as checkout.
       const [row] = await louezDb.db
-        .select({ totalAmount: louezDb.reservations.totalAmount })
+        .select({
+          subtotalAmount: louezDb.reservations.subtotalAmount,
+          subtotalExclTax: louezDb.reservations.subtotalExclTax,
+          taxAmount: louezDb.reservations.taxAmount,
+          taxRate: louezDb.reservations.taxRate,
+          totalAmount: louezDb.reservations.totalAmount,
+        })
         .from(louezDb.reservations)
         .where(eq(louezDb.reservations.id, reservationId));
-      assert.equal(row?.totalAmount, "150.00");
+      assert.equal(row?.subtotalAmount, "150.00");
+      assert.equal(row?.subtotalExclTax, "150.00");
+      assert.equal(row?.taxAmount, "30.00");
+      assert.equal(row?.taxRate, "20.00");
+      assert.equal(row?.totalAmount, "180.00");
 
       const { buildSnapshot } = await import("@/lib/billing-sync/snapshots/build-snapshot");
       const built = await buildSnapshot(

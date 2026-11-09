@@ -712,6 +712,7 @@ Toutes les évolutions notables de Louez sont documentées ici.
 ### 🐳 Auto-hébergement
 
 - 🩹 **L'envoi du logo vers un MinIO privé ne répond plus 401** — Le client S3 fourni ajoutait le checksum CRC32 par défaut du SDK AWS à chaque envoi par proxy. Les stockages qui ne signent pas cet en-tête répondent AccessDenied ou SignatureDoesNotMatch, et la passerelle d'envoi traduisait cela en 401 sur `PUT /api/files/logo?op=proxy`. Les checksums ne partent plus que lorsque l'opération l'exige. Une session reste nécessaire pour obtenir un envoi, et un jeton absent ou modifié reste refusé.
+
 ### 📞 Agent vocal
 
 - **Audio en direct** — L’agent transmet désormais l’audio Twilio à OpenAI GPT-Live, avec le contexte de la boutique, le choix des voix et des aperçus adaptés à la langue. Les outils métier restent dans le backend de l’application.
