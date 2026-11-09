@@ -8434,6 +8434,7 @@
     "minRentalDurationViolation": "レンタル期間は少なくとも {duration} である必要があります",
     "maxRentalDurationViolation": "レンタル期間は {duration} を超えることはできません",
     "deliveryNotEnabled": "このストアでは配達が有効になっていません",
+    "deliveryAndDistanceConflict": "配送料と距離料金は併用できません。",
     "deliveryMinimumOrderAmountNotMet": "レンタルの{amount}より配送可能です",
     "deliveryAddressRequired": "有効な配送先住所を入力してください",
     "storeCoordinatesNotConfigured": "店舗座標が設定されていません",

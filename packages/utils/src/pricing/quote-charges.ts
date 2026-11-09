@@ -30,6 +30,17 @@ export function readQuoteChargeKind(value: unknown): QuoteChargeKind {
   return "duration";
 }
 
+export function hasDeliveryAndDistanceConflict(
+  deliveryFee: number,
+  chargeKinds: readonly unknown[],
+): boolean {
+  return (
+    Number.isFinite(deliveryFee) &&
+    deliveryFee > 0 &&
+    chargeKinds.some((chargeKind) => readQuoteChargeKind(chargeKind) === "distance")
+  );
+}
+
 export function readProductTaxSettings(value: unknown): ProductTaxSettings | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   if (!("inheritFromStore" in value) || typeof value.inheritFromStore !== "boolean") return null;

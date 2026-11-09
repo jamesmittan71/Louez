@@ -47,6 +47,7 @@ export {
   type DashboardQuoteTaxLineResult,
   type DashboardQuoteTaxResult,
   readQuoteChargeKind,
+  hasDeliveryAndDistanceConflict,
   readProductTaxSettings,
   priceQuoteCharge,
   presentCommercialLine,

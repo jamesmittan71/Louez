@@ -88,6 +88,7 @@ import {
   calculateDurationMinutes,
   calculateFixedPrice,
   calculateSeasonalAwarePrice,
+  hasDeliveryAndDistanceConflict,
   priceQuoteCharge,
   quoteLineTaxRate,
   readProductTaxSettings,
@@ -1433,6 +1434,15 @@ export async function createManualReservation(data: CreateReservationData) {
       );
       deliveryFeeAmount = feeResult.totalFee;
     }
+  }
+
+  if (
+    hasDeliveryAndDistanceConflict(
+      deliveryFeeAmount,
+      customItemDetails.map((item) => item.chargeKind),
+    )
+  ) {
+    return { error: "errors.deliveryAndDistanceConflict" };
   }
 
   // Generate reservation number
@@ -3434,6 +3444,25 @@ export async function updateReservation(
       write.type === "update" ? [[write.id, write] as const] : [],
     ),
   );
+  const distanceChargeKinds = [
+    ...reservation.items.flatMap((item) => {
+      if (removedIds.has(item.id)) return [];
+      const update = updatesById.get(item.id);
+      const productId = update ? (update.values.productId ?? null) : item.productId;
+      if (productId) return [];
+      const pricingBreakdown = update?.values.pricingBreakdown ?? item.pricingBreakdown;
+      return [pricingBreakdown?.chargeKind];
+    }),
+    ...itemWrites.flatMap((write) =>
+      write.type === "insert" && !write.values.productId
+        ? [write.values.pricingBreakdown?.chargeKind]
+        : [],
+    ),
+  ];
+  if (hasDeliveryAndDistanceConflict(deliveryFee, distanceChargeKinds)) {
+    return { error: "errors.deliveryAndDistanceConflict" };
+  }
+
   const quoteLineDrafts: Array<{
     id: string;
     amount: number;

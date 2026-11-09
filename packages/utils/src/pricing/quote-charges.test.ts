@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   buildDashboardQuoteTax,
+  hasDeliveryAndDistanceConflict,
   presentCommercialLine,
   priceQuoteCharge,
   readQuoteChargeKind,
@@ -69,6 +70,12 @@ test("a missing charge kind keeps the existing duration multiplication", () => {
   assert.equal(line.chargeKind, "duration");
   assert.equal(line.total, 480);
   assert.equal(line.stockQuantity, 2);
+});
+
+test("native delivery fees cannot be combined with a distance charge", () => {
+  assert.equal(hasDeliveryAndDistanceConflict(25, ["duration", "distance"]), true);
+  assert.equal(hasDeliveryAndDistanceConflict(0, ["distance"]), false);
+  assert.equal(hasDeliveryAndDistanceConflict(25, ["duration", undefined]), false);
 });
 
 test("documents show a rate times the billed quantity, and kilometres are not stock", () => {
@@ -175,4 +182,17 @@ test("dashboard VAT follows the store rate and does not tax an exempt line twice
   assert.equal(disabled.taxAmount, null);
   assert.equal(disabled.totalAmount, 770);
   assert.equal(disabled.lines[0]?.taxRate, null);
+
+  const zeroRate = buildDashboardQuoteTax({
+    lines: [{ id: "hire", amount: 100, taxRate: 0, quantity: 1, unitRate: 100 }],
+    deliveryFee: 0,
+    discountAmount: 0,
+    depositAmount: 0,
+    taxSettings: { enabled: true, defaultRate: 0, displayMode: "exclusive" },
+  });
+  assert.equal(zeroRate.taxAmount, 0);
+  assert.equal(zeroRate.subtotalExclTax, 100);
+  assert.equal(zeroRate.totalAmount, 100);
+  assert.equal(zeroRate.lines[0]?.taxRate, "0.00");
+  assert.equal(zeroRate.lines[0]?.taxAmount, "0.00");
 });

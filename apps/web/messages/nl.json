@@ -8434,6 +8434,7 @@
     "minRentalDurationViolation": "De huurduur moet minstens {duration} zijn",
     "maxRentalDurationViolation": "De huurduur mag niet meer dan {duration} zijn",
     "deliveryNotEnabled": "Levering is niet ingeschakeld voor deze winkel",
+    "deliveryAndDistanceConflict": "Bezorgkosten kunnen niet worden gecombineerd met een afstandsvergoeding.",
     "deliveryMinimumOrderAmountNotMet": "Bezorging is beschikbaar vanaf {amount} aan huur",
     "deliveryAddressRequired": "Voer een geldig afleveradres in",
     "storeCoordinatesNotConfigured": "Winkelcoördinaten zijn niet geconfigureerd",

@@ -8434,6 +8434,7 @@
     "minRentalDurationViolation": "La durée de location doit être d'au moins {duration}",
     "maxRentalDurationViolation": "La durée de location ne peut pas dépasser {duration}",
     "deliveryNotEnabled": "La livraison n'est pas activée pour cette boutique",
+    "deliveryAndDistanceConflict": "Les frais de livraison ne peuvent pas être cumulés avec des frais au kilomètre.",
     "deliveryMinimumOrderAmountNotMet": "La livraison est disponible à partir de {amount} de location",
     "deliveryAddressRequired": "Veuillez saisir une adresse de livraison valide",
     "storeCoordinatesNotConfigured": "Les coordonnées de la boutique ne sont pas configurées",
