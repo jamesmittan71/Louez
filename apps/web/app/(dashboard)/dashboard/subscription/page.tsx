@@ -2,9 +2,12 @@ import { getTranslations } from 'next-intl/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { MessageSquare } from 'lucide-react'
-import { after } from 'next/server'
+import { after, connection } from 'next/server'
 
+import { legacyBillingApplies } from '@/lib/billing/policy'
+import { requirePlatformBilling } from '@/lib/billing/require-billing'
 import { getCurrentStore } from '@/lib/store-context'
+import { hasLiveSubscription } from '@/lib/stripe/subscription-status'
 import { syncStorePaymentMethodStatus } from '@/lib/discord/platform-notifications'
 import { getSubscriptionWithPlan, getPlans, hasStripeCustomer, storeHasDefaultPaymentMethod } from '@/lib/stripe/subscriptions'
 import { getStoreUsage, canAddTeamMember, canSendSms, getStorePlan } from '@/lib/plan-limits'
@@ -35,10 +38,19 @@ export default async function SubscriptionPage({
     topup?: string
   }>
 }) {
+  // Read LOUEZ_BILLING at request time: before a dynamic API, Cache Components
+  // would run this check during the build, which has no LOUEZ_BILLING, and serve a 404.
+  await connection()
+  requirePlatformBilling()
   const store = await getCurrentStore()
 
   if (!store) {
     redirect('/onboarding')
+  }
+  // This page sits behind a redirect to the settings one (next.config.ts), which also
+  // sells plans to a store the billing service bills, without Louez's usage summary.
+  if (!(await legacyBillingApplies(store.id, new Date()))) {
+    redirect('/dashboard/settings/subscription')
   }
 
   const t = await getTranslations('dashboard.settings.subscription')
@@ -199,6 +211,7 @@ export default async function SubscriptionPage({
         discountDurationMonths={store.discountDurationMonths}
         pendingBillingMode={subscription?.pendingBillingMode ?? null}
         showBackToPayAsYouGo={isPayAsYouGo}
+        hasLiveSubscription={hasLiveSubscription(subscription)}
       />
 
       {credits && <AiCreditsSection {...credits} />}

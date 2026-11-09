@@ -214,8 +214,8 @@
       "sessionExpired": "Your session has expired. Sign in again, then retry.",
       "passwordSignUpDisabled": "Creating an account with a password is not available. Use a code sent by email."
     },
-    "referralBanner": "{storeName} invited you to Louez — create your store and start with {count} free reservations.",
-    "referralBannerGeneric": "🎁 You've been invited to Louez — create your store and start with {count} free reservations.",
+    "referralBanner": "{storeName} invited you to Louez — set up your store in minutes.",
+    "referralBannerGeneric": "You've been invited to Louez — set up your store in minutes.",
     "socialProofRating": "4.9/5",
     "socialProofTrusted": "450+ rental businesses trust us to run their rentals",
     "review1Quote": "We left our old software when prices got too high for Louez.io… and honestly, no regrets! Simple, flexible, affordable and efficient.",
@@ -224,8 +224,8 @@
     "review2Role": "Co-founder · Bloom",
     "review3Quote": "Louez.io is a reliable, clear and precise platform. Managing the season will be so much simpler and faster.",
     "review3Role": "Co-founder · Les Frères Complices",
-    "perk1": "Your first 15 reservations are free",
-    "perk2": "Max €1 per reservation, less as you grow, 0% commission, no subscription",
+    "perk1": "24/7 bookings, online payment and deposit",
+    "perk2": "Automatic contracts and a client portal",
     "perk3": "Your online store ready in 5 minutes",
     "visitShop": "Visit the store",
     "name": "Name",
@@ -251,6 +251,52 @@
     "hidePassword": "Hide password",
     "passwordRules": {
       "minLength": "At least {count} characters"
+    },
+    "passkey": {
+      "prompt": {
+        "title": "Sign in faster next time"
+      },
+      "setup": {
+        "title": "Your next sign-in, made simple",
+        "description": "Create a passkey to sign in with your fingerprint, face or device PIN.",
+        "privacy": "Your biometric data stays on your device. Your other sign-in methods remain available.",
+        "account": "For your account",
+        "enable": "Create my passkey",
+        "waiting": "Confirm on your device…",
+        "later": "Maybe later",
+        "successTitle": "Your passkey is ready",
+        "successDescription": "It will be offered first the next time you sign in on this browser.",
+        "done": "Continue"
+      },
+      "login": {
+        "title": "Welcome back",
+        "description": "Sign in with your passkey. Your device will ask you to confirm your identity.",
+        "continue": "Sign in with a passkey",
+        "waiting": "Waiting for your device…",
+        "otherMethod": "Use another method"
+      },
+      "settings": {
+        "title": "Passkeys",
+        "description": "Sign in quickly and securely, without typing a password.",
+        "empty": "No passkeys registered yet.",
+        "add": "Add a passkey",
+        "defaultName": "Passkey",
+        "created": "Added on {date, date, medium}",
+        "unsupported": "Use a supported browser and a secure connection (HTTPS).",
+        "remove": "Remove",
+        "removeTitle": "Remove this passkey?",
+        "removeDescription": "You will no longer be able to use it to sign in to Louez. Your other sign-in methods remain available. You can also remove it from your device’s passkey manager.",
+        "removed": "Passkey removed",
+        "cancel": "Cancel"
+      },
+      "reauthenticate": "Sign in again",
+      "errors": {
+        "cancelled": "The request was cancelled or timed out. Try again or use another method.",
+        "alreadyRegistered": "This passkey is already registered. You can use it to sign in.",
+        "reauthenticate": "To protect your account, sign in again before managing your passkeys.",
+        "rateLimited": "Too many attempts. Wait a minute before trying again.",
+        "failed": "Unable to use this passkey. Try again or choose another method."
+      }
     }
   },
   "invitation": {
@@ -422,6 +468,15 @@
       "newReservation": "New reservation #{number}",
       "newReservationDescription": "A new reservation request has arrived"
     },
+    "reservationGate": {
+      "pausedTitle": "New reservations are paused",
+      "pausedDescription": "Customers can't book online and new confirmations are on hold until the store's billing is up to date.",
+      "noticeTitle": "Billing needs your attention",
+      "noticeDescription": "Check the store's billing to keep taking reservations.",
+      "manageBilling": "Manage billing",
+      "storefrontDescription": "Customers see that the store isn't taking reservations online.",
+      "openDashboard": "Go to dashboard"
+    },
     "pendingAlert": {
       "singlePending": "1 pending request",
       "multiplePending": "{count} pending requests",
@@ -557,8 +612,8 @@
       "link": {
         "title": "Refer & earn",
         "description": "Share your link and invite other rental businesses to join Louez.",
-        "reward": "For every rental business you refer that makes its first sale, you earn {referrer} free reservations (≈ {rewardValue}) — and they start with {referred}.",
-        "rewardInvoiceCredit": "For every rental business you refer that makes its first sale, you earn a {rewardValue} credit on your Louez invoice — and they start with {referred} free reservations.",
+        "reward": "For every rental business you refer that makes its first sale, you earn {referrer} free reservations (≈ {rewardValue}).",
+        "rewardInvoiceCredit": "For every rental business you refer that makes its first sale, you earn a {rewardValue} credit on your Louez invoice.",
         "copyLink": "Copy link",
         "linkCopied": "Link copied!",
         "linkCopyFailed": "Could not copy the link.",
@@ -589,8 +644,8 @@
       },
       "nudge": {
         "title": "Enjoying Louez?",
-        "description": "Refer a rental business — you both earn {count} free reservations (≈ {rewardValue}).",
-        "descriptionInvoiceCredit": "Refer a rental business — they start with {count} free reservations, you earn a {rewardValue} credit.",
+        "description": "Refer a rental business — you earn {count} free reservations (≈ {rewardValue}) once they make their first online sale.",
+        "descriptionInvoiceCredit": "Refer a rental business — you earn a {rewardValue} credit once they make their first online sale.",
         "cta": "Refer",
         "dismiss": "Dismiss"
       },
@@ -604,7 +659,7 @@
         "open": "How it works",
         "title": "How referrals work",
         "step1": "Share your invitation link with other rental businesses.",
-        "step2": "Your referral starts with {count} free reservations the moment they sign up.",
+        "step2": "Your referral creates their Louez store through your link.",
         "step3": "As soon as your referral makes their first online sale of at least {minAmount}, you earn {count} free reservations.",
         "step3InvoiceCredit": "As soon as your referral makes their first online sale of at least {minAmount}, you earn a credit on your next Louez invoice.",
         "note": "Only sales paid online (card/Stripe) unlock the reward — manual or cash payments don't count. Free reservations are rentals with no Louez commission."
@@ -765,7 +820,7 @@
         "tagline": {
           "label": "Tagline",
           "description": "One line under the name, at the top of the home page. {max} characters at most.",
-          "placeholder": "Bike and paddle rental in Carnac since 2012"
+          "placeholder": "Describe your business in one sentence…"
         },
         "descriptionHint": "The text of the About page. Without a tagline, it also shows at the top of the home page.",
         "logos": {
@@ -1927,6 +1982,20 @@
             "unassigned": "Unassigned from reservation",
             "updated": "Unit updated"
           }
+        },
+        "customerFields": {
+          "title": "Information asked to customers",
+          "description": "Asked online or noted per rented item.",
+          "scope": {
+            "customer": "Customer record",
+            "item": "Per item"
+          },
+          "collect": {
+            "never": "Team only",
+            "optional": "Online · Optional",
+            "required": "Online · Required"
+          },
+          "manage": "Manage in Customer record"
         }
       }
     },
@@ -2396,10 +2465,31 @@
       },
       "contract": {
         "title": "Contract",
-        "signed": "Signed on {date}",
-        "notSigned": "Not signed",
         "generate": "Generate contract",
-        "download": "Download"
+        "download": "Download",
+        "signedBadge": "Contract signed",
+        "unsignedBadge": "Contract not signed",
+        "signedOn": "On {date}",
+        "unsignedTooltip": "The customer hasn't accepted the contract yet. They can sign it from the link in their email, or in store at pickup.",
+        "methods": {
+          "checkout": "Accepted when booking online",
+          "payment_page": "Signed on the payment page",
+          "account": "Signed from their customer account",
+          "in_store": "Signed in store"
+        },
+        "signInStore": "Sign in store",
+        "sendSignatureLink": "Send for signature",
+        "signatureLinkSent": "Signing link sent to the customer",
+        "signDialog": {
+          "title": "Sign the contract in store",
+          "description": "Let the customer read the contract, then sign on this device. Their signature and name will appear on the contract.",
+          "viewContract": "Open the contract",
+          "signerName": "Signer's name",
+          "acceptance": "The customer has read the contract and the rental terms and accepts them.",
+          "confirm": "Confirm signature",
+          "success": "Contract signed",
+          "alreadySigned": "This contract is already signed."
+        }
       },
       "notes": {
         "title": "Internal notes",
@@ -2677,6 +2767,9 @@
         "quote_accepted": "Quote accepted",
         "quote_declined": "Quote declined",
         "overbooked": "Overbooked",
+        "contract_signed": "Contract signed",
+        "contractUnsigned": "Without signed contract",
+        "signedBy": "Signed by {name}",
         "showAll": "Show all ({count} events)",
         "showLess": "Show less",
         "paymentFailure": {
@@ -2738,6 +2831,11 @@
         "warningDepositTitle": "Deposit not collected",
         "warningDepositDescription": "The {amount} deposit has not been collected yet. Make sure to collect it before handing over the equipment.",
         "acknowledgePickupWarnings": "I understand and wish to continue despite these warnings",
+        "contractUnsigned": "Contract not signed",
+        "warningContractTitle": "Contract not signed",
+        "warningContractDescription": "The customer hasn't signed their contract yet. Have them sign it in store, or continue without a signature: it will be noted in the history.",
+        "acknowledgePickupWithoutSignature": "I understand and want to continue, even without a signed contract",
+        "warningContractRequiredDescription": "Your store requires the contract to be signed before pickup. Have the customer sign in store to continue.",
         "confirmPickup": "Confirm pickup",
         "returnConfirmTitle": "Confirm return",
         "returnConfirmDescription": "Check the equipment condition and financial summary before confirming the return.",
@@ -3104,15 +3202,28 @@
       },
       "filter": {
         "type": "Customer type",
-        "all": "All customers"
+        "all": "All customers",
+        "created": "Creation date",
+        "anyDate": "Any date",
+        "source": "Source",
+        "allSources": "All sources",
+        "channel": "Channel",
+        "allChannels": "All channels",
+        "reset": "Reset filters",
+        "importRun": "From an import",
+        "noResults": "No customer matches these filters.",
+        "from": "From {date}",
+        "to": "to {date}",
+        "more": "Filters",
+        "createdFrom": "Created from",
+        "createdTo": "Created until",
+        "remove": "Remove filter"
       },
       "deleteConfirm": {
         "title": "Delete this customer?",
         "description": "This action is irreversible. The customer will be permanently deleted."
       },
       "form": {
-        "personalInfo": "Personal information",
-        "personalInfoDescription": "Customer's basic information",
         "businessCustomer": "Business customer",
         "businessCustomerDescription": "Check if this customer represents a company",
         "companyName": "Company name",
@@ -3132,8 +3243,6 @@
         "emailPlaceholder": "john.doe@example.com",
         "phone": "Phone",
         "phonePlaceholder": "+1 234 567 8900",
-        "addressSection": "Address",
-        "addressDescription": "Customer's address (optional)",
         "address": "Address",
         "addressPlaceholder": "123 Main Street",
         "postalCode": "Postal code",
@@ -3146,7 +3255,17 @@
         "internalNotesDescription": "Private notes about this customer (not visible to customer)",
         "notesPlaceholder": "Add notes about this customer...",
         "save": "Save",
-        "createCustomer": "Create customer"
+        "createCustomer": "Create customer",
+        "customerKind": "Customer type",
+        "birthDate": "Date of birth",
+        "ageYears": "{age, plural, one {# year old} other {# years old}}",
+        "acquisitionSource": "How did they hear about you?",
+        "acquisitionSourcePlaceholder": "Select",
+        "acquisitionSourceDetail": "Details",
+        "acquisitionSourceDetailPlaceholder": "Tourist office, trade show, partner hotel…",
+        "socialSection": "Social and links",
+        "customizeFields": "Customize fields",
+        "fieldsTitle": "Customer details"
       },
       "countries": {
         "FR": "France",
@@ -3161,6 +3280,80 @@
       "quickCreate": {
         "title": "New customer",
         "description": "The customer will be created and selected automatically."
+      },
+      "sources": {
+        "word_of_mouth": "Word of mouth",
+        "search_engine": "Google search",
+        "social_media": "Social media",
+        "walk_in": "Walked past the shop",
+        "partner": "Partner or tourist office",
+        "ads": "Advertising",
+        "returning": "Returning customer",
+        "other": "Other"
+      },
+      "channels": {
+        "dashboard": "Created by the team",
+        "storefront": "Online store",
+        "marketplace": "reeent",
+        "import": "Import",
+        "api": "API",
+        "ai": "AI assistant"
+      },
+      "social": {
+        "add": "Add a link",
+        "remove": "Remove {network}",
+        "open": "Open {network}",
+        "placeholderHandle": "@handle or profile link",
+        "placeholderWebsite": "https://…",
+        "placeholderWhatsapp": "+44 7700 900123",
+        "whatsapp": "WhatsApp",
+        "empty": "No links"
+      },
+      "fields": {
+        "yes": "Yes",
+        "no": "No",
+        "reveal": "Show",
+        "hide": "Hide",
+        "copy": "Copy",
+        "copied": "Copied",
+        "selectPlaceholder": "Select",
+        "suspicious": "This number looks invalid. Double-check it: it will be saved anyway.",
+        "duplicate": "Already used by {name}.",
+        "viewCustomer": "View record",
+        "complete": "{count, plural, one {Fill in # field} other {Fill in # fields}}",
+        "issues": {
+          "required": "This field is required.",
+          "invalidNumber": "Enter a number.",
+          "invalidDate": "Invalid date.",
+          "invalidOption": "Pick a value from the list.",
+          "invalidEmail": "Invalid email address.",
+          "invalidPhone": "Invalid phone number.",
+          "invalidUrl": "Invalid link."
+        }
+      },
+      "detail": {
+        "newReservation": "New reservation",
+        "edit": "Edit",
+        "moreActions": "More actions",
+        "createdVia": "Created via: {channel}",
+        "bornOn": "Born on {date}",
+        "source": "Source",
+        "lastRental": "Last rental",
+        "never": "Never",
+        "editSection": "Edit: {section}",
+        "editSectionDescription": "Only this information will be changed.",
+        "sectionSaved": "Changes saved",
+        "save": "Save",
+        "cancel": "Cancel",
+        "infoCard": "Details",
+        "emptyInfo": "Nothing filled in yet."
+      },
+      "pagination": {
+        "showing": "{from}–{to} of {total}",
+        "perPage": "Per page",
+        "previous": "Previous page",
+        "next": "Next page",
+        "pageOf": "Page {page} of {pages}"
       }
     },
     "calendar": {
@@ -3748,6 +3941,12 @@
         "manageBilling": "Manage billing",
         "changePlan": "Change plan",
         "changePlanDescription": "Compare features and choose the plan that fits your needs.",
+        "changePlanPreviewLoading": "Working out the amount to pay…",
+        "changePlanChargedNow": "Charged today: {amount}. Your new plan starts right away.",
+        "changePlanNothingToPay": "Nothing to pay today. Your new plan starts right away.",
+        "changePlanAtPeriodEnd": "Nothing to pay today. Your new plan starts on {date}. Until then, you keep your current plan.",
+        "pendingPlanChange": "{currentPlan} until {date}, then {newPlan} {interval, select, yearly {yearly} other {monthly}}.",
+        "keepCurrentPlan": "Keep {plan}",
         "cancelSubscription": "Cancel subscription",
         "subscribe": "Subscribe",
         "selectPlan": "Select this plan",
@@ -3910,6 +4109,133 @@
       "team": "Team",
       "saveChanges": "Save changes",
       "settingsSaved": "Settings saved",
+      "billingReturn": {
+        "refreshed": "Billing is up to date.",
+        "pending": "Billing changes can take a few minutes to appear here."
+      },
+      "billing": {
+        "label": "Billing",
+        "description": "Your Louez offer, this month, your billing card, your billing details and your statements.",
+        "offerTitle": "Your Louez offer",
+        "offerPending": "Your offer will show here once Louez has set up billing for this store.",
+        "status": {
+          "accepting": "Taking reservations",
+          "blocked": "Reservations paused"
+        },
+        "blocked": {
+          "payment_method_required": "Add a billing card to take new reservations.",
+          "payment_overdue": "A Louez billing payment failed. Settle it to take new reservations.",
+          "balance_limit_reached": "Your balance due has reached the limit for stores without a card. Add a billing card and reservations resume.",
+          "suspended": "Billing for this store is suspended. Contact Louez to take reservations again."
+        },
+        "readOnly": "As a platform admin, you see this store's billing read-only.",
+        "manage": "Manage billing",
+        "loadFailed": "Billing couldn't load. Try again in a moment.",
+        "settingUp": "Your billing is being set up. Check this page again in a few minutes.",
+        "month": {
+          "title": "This month",
+          "atSource": "Taken at source",
+          "due": "Expected remainder",
+          "credit": "Expected credit",
+          "statementAt": "Next statement: {date}."
+        },
+        "card": {
+          "title": "Billing card",
+          "description": "Louez charges this card what the fees taken at source don't cover.",
+          "saved": "{brand} ending in {last4}",
+          "otherBrand": "Card",
+          "onFile": "A payment method is saved.",
+          "expires": "Expires {date}",
+          "expired": "Expired {date}. Replace it so your statements can be paid.",
+          "missing": "No billing card yet.",
+          "unknown": "Your billing card isn't shown here yet.",
+          "notNeeded": "No card needed: nothing is billed to your store.",
+          "inLouez": "This store's payment method is managed in its subscription for now.",
+          "balance": "Unpaid balance: {amount}",
+          "balanceWithLimit": "Unpaid balance: {amount} · limit {limit}",
+          "addCardNotice": "Add a card so your statements are paid without you doing anything.",
+          "add": "Add a card",
+          "replace": "Replace card",
+          "opening": "Opening Stripe…",
+          "stripeNote": "You enter your card on Stripe's secure page, then come back here.",
+          "startFailed": "Stripe's page couldn't open. Try again in a moment.",
+          "off": "Adding a card isn't available yet."
+        },
+        "details": {
+          "title": "Billing details",
+          "description": "Your invoices from Louez show these details.",
+          "noCustomer": "Add a billing card first. Your billing details are saved with it.",
+          "unavailable": "Your billing details can't be shown right now. Try again later.",
+          "legalName": "Legal name",
+          "legalNameHint": "Your business's name, as registered.",
+          "email": "Billing email",
+          "emailHint": "Invoices and payment receipts are sent to this address.",
+          "line1": "Address",
+          "line2": "Address line 2 (optional)",
+          "postalCode": "Postal code",
+          "city": "City",
+          "state": "State or region (optional)",
+          "country": "Country",
+          "countryPlaceholder": "Choose a country",
+          "vatNumber": "EU VAT number (optional)",
+          "vatNumberHint": "With its country code, such as FR12345678901. Leave it empty if your business has none.",
+          "vat": {
+            "pending": "Checking this number with VIES, the EU's VAT number service. Reload the page in a few minutes.",
+            "verified": "VIES confirms this VAT number.",
+            "unverified": "VIES doesn't recognize this VAT number. Check it, then save again.",
+            "unavailable": "VIES couldn't be reached to check this number. Save again later.",
+            "unknown": "This VAT number hasn't been checked yet."
+          },
+          "errors": {
+            "required": "This field is required.",
+            "email": "Enter a valid email address.",
+            "refused": "This value was refused. Check it and try again.",
+            "vatNumber": "This VAT number was refused. Enter an EU VAT number with its country code, such as FR12345678901.",
+            "unavailable": "Your billing details can't be saved yet. Add a billing card first.",
+            "failed": "Your billing details couldn't be saved. Try again in a moment."
+          },
+          "save": "Save",
+          "saved": "Billing details saved."
+        },
+        "statements": {
+          "title": "Statements",
+          "description": "What Louez bills your store, month by month.",
+          "notFinal": "Not final yet: these amounts follow your reservations and payments as they stand. Invoices aren't available yet.",
+          "open": "Not final",
+          "summary": "Owed {owed} · Taken at source {atSource}",
+          "creditOf": "Credit of {amount}",
+          "legacy": "Louez bills your store as before for now. Your statements will appear here once your billing moves to this page.",
+          "legacyUntil": "Louez bills your store as before until {date}. Your statements appear here from then on.",
+          "empty": "No statement yet. Your first one appears here once something is billed to your store."
+        },
+        "statement": {
+          "totals": "Totals",
+          "owed": "Owed",
+          "atSource": "Taken at source",
+          "due": "Remainder",
+          "credit": "Credit",
+          "groups": {
+            "commission": "Commission on payments",
+            "unpaid": "Commission on unpaid amounts",
+            "reservations": "Reservation fees",
+            "marketplace": "Marketplace fees",
+            "atSource": "Taken at source"
+          },
+          "lines": {
+            "pay": "Payment",
+            "refund": "Refund",
+            "dispute_open": "Dispute opened",
+            "dispute_close": "Dispute won",
+            "uncollected": "Unpaid part of the reservation",
+            "rental": "Reservation",
+            "mkt": "Marketplace booking",
+            "fee": "Fee taken at source",
+            "feerefund": "Fee refunded at source"
+          },
+          "reservation": "Reservation {number}",
+          "adjusts": "Correction for {period}"
+        }
+      },
       "nav": {
         "storeDescription": "Information and configuration",
         "appearanceDescription": "Logo, colors and theme",
@@ -4493,6 +4819,14 @@
           "statusRequired": "Select at least one status.",
           "noContracts": "No reservations match this date range and these statuses.",
           "exportFailed": "Export failed. Please try again."
+        },
+        "customers": {
+          "title": "Customers",
+          "description": "Export your customer records: contact details, birth date, origin, creation channel and your custom fields.",
+          "button": "Export customers",
+          "dateRangeHint": "The period applies to the date each record was created. Leave it empty to export all your customers.",
+          "includeSensitive": "Include sensitive data",
+          "includeSensitiveWarning": "Fields marked as sensitive will appear unmasked in the file: keep it somewhere safe."
         }
       },
       "embed": {
@@ -4991,9 +5325,9 @@
         "modeOptional": "Customer's choice",
         "modeOptionalDescription": "Customer chooses between store pickup or delivery",
         "modeRequired": "Delivery required",
-        "modeRequiredDescription": "Delivery is mandatory, no pickup option",
+        "modeRequiredDescription": "Delivered to and collected from the customer's address, no store pickup or return",
         "modeIncluded": "Delivery included",
-        "modeIncludedDescription": "Delivery is mandatory and free",
+        "modeIncludedDescription": "Delivered to and collected from the customer's address, free of charge",
         "noCoordinatesWarning": "You must set your store address with map location to enable delivery.",
         "noCoordinatesError": "Please first configure your store address with GPS location.",
         "goToStoreSettings": "Enter the address",
@@ -5517,6 +5851,7 @@
           "membershipsLeft": "You will also leave {count, plural, one {# other store} other {# other stores}} where you are a member.",
           "businessDocumentsDeleted": "{count, plural, one {# business invoice from your store will be deleted from Louez} other {# business invoices from your stores will be deleted from Louez}}. Export them before continuing if you need to keep them.",
           "legalRetention": "{count, plural, one {# Louez billing record will be kept} other {# Louez billing records will be kept}} for 10 years after the financial year closes, in a separate restricted-access archive.",
+          "googleCalendarNotice": "Louez will delete the calendar it created in your Google Calendar. If Google no longer gives Louez access to it, that calendar stays in your Google account and you can delete it from Google Calendar.",
           "confirmationLabel": "Enter {email} to confirm",
           "passwordLabel": "Current password",
           "passwordRequired": "Enter your current password.",
@@ -5778,7 +6113,9 @@
           "defaultBadge": "Recommended",
           "defaultVoice": "Recommended voice",
           "title": "Choose your agent's voice",
-          "description": "Listen to the voices and pick the one that will represent your store on the phone."
+          "description": "Listen to the voices and pick the one that will represent your store on the phone.",
+          "languageVoices": "For this language",
+          "allVoices": "All voices"
         },
         "setup": {
           "step1": "Pick your number",
@@ -5838,7 +6175,7 @@
         },
         "notConfigured": {
           "title": "Telephony not configured",
-          "description": "The platform operator must configure a telephony provider (AI_PHONE_ENABLED, VOICE_PROVIDER and the credentials) to enable the voice agent."
+          "description": "Telephony or the voice service is not fully configured. Contact the platform administrator to enable the agent."
         },
         "language": "Answer language",
         "languageDescription": "The language the assistant speaks to callers in",
@@ -5868,7 +6205,10 @@
           "male": "Male"
         },
         "voicePreview": "Preview",
-        "voiceRecommended": "Recommended"
+        "voiceRecommended": "Recommended",
+        "voiceMigrated": "Your previous voice has been replaced by the recommended GPT-Live voice. You can choose another below.",
+        "voicePreviewError": "The preview is unavailable right now. Please try again shortly.",
+        "voicePreviewUnavailable": "Previews will be available once the voice service is configured."
       },
       "settingsNavigation": {
         "label": "Settings navigation",
@@ -5895,8 +6235,7 @@
             "enableLabel": "Enable the reeent channel",
             "benefits": {
               "visibility": "New customers coming from reeent search.",
-              "seo": "A dedicated page for your business, indexed by search engines.",
-              "free": "Free at launch, with no commission on your bookings."
+              "seo": "A dedicated page for your business, indexed by search engines."
             }
           },
           "storefront": {
@@ -5947,7 +6286,7 @@
             },
             "marketplaceTermsAccepted": {
               "label": "Marketplace terms accepted",
-              "description": "The marketplace is free at launch. The terms reserve the right to introduce a commission later on bookings originating from the marketplace.",
+              "description": "The marketplace terms apply to bookings that come from reeent, on top of your Louez offer.",
               "acceptedAt": "Accepted on {date}"
             }
           }
@@ -5990,13 +6329,478 @@
           "memberTitle": "reeent lifetime offer — 0 € reeent commission",
           "memberRank": "Member no. {rank} of the launch cohort",
           "incentiveBadge": "Launch offer",
-          "incentiveLine": "{remaining} spots left with 0 € reeent commission for life"
+          "incentiveLine": "{remaining} spots left with 0 € reeent commission for life",
+          "dismiss": "Hide"
         }
       },
       "extensions": {
         "title": "Automatic rental extensions",
         "description": "Customers can extend when equipment is available and the extra cost can be calculated. Special cases require your approval.",
         "maxDays": "Maximum extra days (leave empty for no limit)"
+      },
+      "contractSignature": {
+        "title": "Contract signature",
+        "description": "What happens when you mark a reservation picked up while the customer hasn't signed their contract.",
+        "optional": "Optional",
+        "optionalDescription": "No warning at pickup. The \"Contract not signed\" badge stays visible on the reservation.",
+        "recommended": "Recommended",
+        "recommendedDescription": "A warning offers to have it signed in store. You can hand over the equipment without a signature; it is noted in the history.",
+        "required": "Required",
+        "requiredDescription": "Pickup is refused until the contract is signed, online by the customer or in store."
+      },
+      "customerFields": {
+        "title": "Customer record",
+        "native": {
+          "birthDate": "Date of birth",
+          "acquisitionSource": "Customer source",
+          "socialLinks": "Social and links"
+        },
+        "field": {
+          "add": "Add a field",
+          "delete": "Delete permanently",
+          "drag": "Reorder"
+        },
+        "badges": {
+          "required": "Required",
+          "sensitive": "Sensitive",
+          "online": {
+            "optional": "Online · Optional",
+            "required": "Online · Required"
+          },
+          "noTarget": "No product selected",
+          "hidden": "Hidden",
+          "louez": "Louez field"
+        },
+        "dialog": {
+          "label": "Label",
+          "labelPlaceholder": "Licence number",
+          "options": "Choices",
+          "optionsPlaceholder": "Type a choice then Enter",
+          "unit": "Unit",
+          "unitPlaceholder": "cm, kg, km…",
+          "helpText": "Input hint",
+          "helpTextPlaceholder": "Shown under the field",
+          "appliesTo": "Applies to",
+          "appliesToAll": "Everyone",
+          "appliesToIndividual": "Individuals",
+          "appliesToBusiness": "Businesses",
+          "types": {
+            "text": "Text",
+            "textarea": "Long text",
+            "number": "Number",
+            "date": "Date",
+            "select": "Choice list",
+            "checkbox": "Yes / No",
+            "phone": "Phone",
+            "email": "Email",
+            "url": "Link"
+          },
+          "flags": {
+            "requiredHelp": "The record cannot be saved without it.",
+            "sensitive": "Sensitive data",
+            "sensitiveHelp": "Hidden by default on the record and left out of exports.",
+            "contract": "Show on the contract",
+            "contractHelp": "Added under the customer's contact details.",
+            "search": "Include in search",
+            "searchHelp": "Type the value to find the customer. Also flags duplicates.",
+            "list": "Show in the list",
+            "listHelp": "Adds a column to the customer list.",
+            "requiredTeam": "Required for your team",
+            "sensitiveItemHelp": "Hidden by default on the booking.",
+            "contractItemHelp": "Printed under the rented item's line."
+          },
+          "labelPlaceholderItem": "Shoe size",
+          "scopes": {
+            "customerDescription": "One value per customer: licence, ID document…",
+            "item": "Per rented item",
+            "itemDescription": "One value per person or piece of equipment: height, shoe size…"
+          },
+          "online": {
+            "title": "Online booking",
+            "description": "What customers fill in when they book on your store."
+          }
+        },
+        "templates": {
+          "dialogTitle": "Field templates",
+          "dialogDescription": "Add a set of fields in one click. You can then rename, reorder or archive them.",
+          "privacyNote": "Only collect what you really need: you are responsible for your customers' data.",
+          "groups": {
+            "country": "By country",
+            "activity": "By activity",
+            "general": "General"
+          },
+          "adopt": "Add",
+          "adopted": "Added",
+          "fieldsCount": "{count, plural, one {# field} other {# fields}}",
+          "adoptedToast": "{count, plural, one {# field added} other {# fields added}}",
+          "identityDocument": {
+            "name": "Identity document",
+            "description": "The proof of identity asked for at handover.",
+            "fields": {
+              "id_document_type": {
+                "label": "Document type",
+                "options": {
+                  "idCard": "ID card",
+                  "passport": "Passport",
+                  "residencePermit": "Residence permit",
+                  "drivingLicense": "Driving licence",
+                  "other": "Other"
+                }
+              },
+              "id_document_number": {
+                "label": "Document number"
+              },
+              "id_document_expiry": {
+                "label": "Expiry date"
+              }
+            }
+          },
+          "emergencyContact": {
+            "name": "Emergency contact",
+            "description": "Who to call if something goes wrong during the rental.",
+            "fields": {
+              "emergency_contact_name": {
+                "label": "Name"
+              },
+              "emergency_contact_phone": {
+                "label": "Phone"
+              },
+              "emergency_contact_relation": {
+                "label": "Relationship",
+                "options": {
+                  "partner": "Partner",
+                  "parent": "Parent",
+                  "friend": "Friend",
+                  "colleague": "Colleague",
+                  "other": "Other"
+                }
+              }
+            }
+          },
+          "businessContacts": {
+            "name": "Business customers",
+            "description": "The accounts contact and the reference to quote on your documents.",
+            "fields": {
+              "accounting_contact_name": {
+                "label": "Accounts contact"
+              },
+              "accounting_email": {
+                "label": "Accounts email"
+              },
+              "purchase_order_reference": {
+                "label": "Purchase order reference"
+              }
+            }
+          },
+          "brazil": {
+            "name": "Brazil",
+            "description": "CPF or CNPJ, with number verification, and RG.",
+            "fields": {
+              "br_cpf_cnpj": {
+                "label": "CPF / CNPJ"
+              },
+              "br_rg": {
+                "label": "RG"
+              },
+              "br_rg_issuer": {
+                "label": "Issuing authority"
+              }
+            }
+          },
+          "spain": {
+            "name": "Spain",
+            "description": "DNI or NIE, with control letter verification.",
+            "fields": {
+              "es_dni_nie": {
+                "label": "DNI / NIE"
+              }
+            }
+          },
+          "italy": {
+            "name": "Italy",
+            "description": "Codice fiscale, with control character verification.",
+            "fields": {
+              "it_codice_fiscale": {
+                "label": "Codice fiscale"
+              }
+            }
+          },
+          "portugal": {
+            "name": "Portugal",
+            "description": "NIF, with control digit verification.",
+            "fields": {
+              "pt_nif": {
+                "label": "NIF"
+              }
+            }
+          },
+          "vehicles": {
+            "name": "Vehicles and scooters",
+            "description": "The driving licence, carried over to the contract.",
+            "fields": {
+              "driving_license_number": {
+                "label": "Licence number"
+              },
+              "driving_license_date": {
+                "label": "Date obtained"
+              },
+              "driving_license_categories": {
+                "label": "Categories"
+              }
+            }
+          },
+          "ski": {
+            "name": "Ski and mountain",
+            "description": "Measurements to prepare the gear before the customer arrives.",
+            "fields": {
+              "height_cm": {
+                "label": "Height"
+              },
+              "weight_kg": {
+                "label": "Weight"
+              },
+              "shoe_size": {
+                "label": "Shoe size"
+              },
+              "ski_level": {
+                "label": "Level",
+                "options": {
+                  "beginner": "Beginner",
+                  "intermediate": "Intermediate",
+                  "advanced": "Advanced",
+                  "expert": "Expert"
+                }
+              }
+            }
+          },
+          "bikes": {
+            "name": "Bikes",
+            "description": "What you need to set the bike up before the customer arrives.",
+            "fields": {
+              "height_cm": {
+                "label": "Height"
+              },
+              "bike_saddle_height": {
+                "label": "Saddle height"
+              },
+              "bike_preferences": {
+                "label": "Preferences"
+              }
+            }
+          },
+          "boating": {
+            "name": "Boating",
+            "description": "The boat licence, carried over to the contract.",
+            "fields": {
+              "boat_license_number": {
+                "label": "Boat licence number"
+              },
+              "boat_license_type": {
+                "label": "Licence type",
+                "options": {
+                  "coastal": "Coastal",
+                  "offshore": "Offshore",
+                  "inland": "Inland waters",
+                  "none": "No licence"
+                }
+              }
+            }
+          },
+          "perItem": "Per rented item"
+        },
+        "deleteDialog": {
+          "title": "Delete “{label}”?",
+          "description": "The field will disappear from every record. This cannot be undone.",
+          "withValues": "{count, plural, one {# customer has a value for this field: it will be erased.} other {# customers have a value for this field: they will be erased.}}",
+          "confirm": "Delete permanently",
+          "cancel": "Cancel",
+          "descriptionItem": "The field will disappear from every booking. This can't be undone.",
+          "withItemValues": "{count, plural, one {# rented item has a value for this field: it will be erased.} other {# rented items have a value for this field: they will be erased.}}",
+          "hideInstead": "Hide instead"
+        },
+        "preview": {
+          "client": {
+            "previewFor": "Preview for",
+            "noProduct": "No product found",
+            "sampleProduct": "Rented item",
+            "oneCardPerUnit": "One card per rented item: two bikes, two cards.",
+            "emptyProduct": "Nothing is asked of the customer for this product.",
+            "emptyAll": "Nothing is asked of the customer yet.",
+            "emptyHint": "Set “Ask the customer” to Optional or Required on a field to see it here."
+          }
+        },
+        "toasts": {
+          "created": "Field added",
+          "deleted": "Field deleted",
+          "hidden": "Field hidden"
+        },
+        "online": {
+          "collect": "Ask the customer",
+          "collectModes": {
+            "never": "No",
+            "optional": "Optional",
+            "required": "Required"
+          },
+          "collectHelp": {
+            "never": "No: only your team sees it.",
+            "customer": {
+              "optional": "Offered to customers when they book online.",
+              "required": "Customers must fill it in to book online."
+            },
+            "item": {
+              "optional": "Offered for each rented item when booking online.",
+              "required": "Must be filled in for each rented item to book online."
+            }
+          },
+          "target": "For",
+          "targetModes": {
+            "all": "All bookings",
+            "products": "Specific products"
+          },
+          "targetHelp": {
+            "customer": {
+              "all": "Asked on every online booking.",
+              "products": "Only asked when the cart holds one of these products."
+            },
+            "item": {
+              "all": "Every rented item carries this field, whatever the product.",
+              "products": "Only items from these categories and products carry this field."
+            }
+          },
+          "targetsNone": "No product selected: this field applies to no booking.",
+          "targetsPlaceholder": "Category or product…",
+          "targetsEmpty": "No results",
+          "groups": {
+            "categories": "Categories",
+            "products": "Products"
+          },
+          "productCount": "{count, plural, =0 {No products} one {# product} other {# products}}",
+          "productStatus": {
+            "draft": "Draft",
+            "archived": "Archived"
+          },
+          "customerEditable": "Customers can edit it from their account",
+          "customerEditableHint": "They find it in their customer account and can update it.",
+          "customerEditableNeverHint": "Available once the field is asked to the customer."
+        },
+        "sectionOnline": {
+          "adoptedTitle": "Which products?",
+          "adoptedDescription": "The “{section}” fields are recorded for each rented item. Pick the products they concern and, if needed, ask customers to fill them in.",
+          "apply": "Apply",
+          "later": "Later"
+        },
+        "builder": {
+          "templates": {
+            "all": "See all templates"
+          },
+          "locked": {
+            "addressPlaceholder": "Street, postcode, city, country",
+            "label": "Essential field",
+            "sheetNote": "Essential field: always on the record. Only its place and width can change."
+          },
+          "field": {
+            "select": "Edit “{label}”",
+            "actions": "Actions for field “{label}”",
+            "draftBadge": "New",
+            "draftPlaceholder": "New field"
+          },
+          "item": {
+            "empty": "Height, shoe size, level… Add what you need to know to prepare each item."
+          },
+          "inspector": {
+            "newTitle": "New field",
+            "add": "Add",
+            "cancel": "Cancel",
+            "close": "Close",
+            "general": "General",
+            "advanced": "Advanced options",
+            "saving": "Saving…",
+            "saved": "Saved",
+            "format": "Format",
+            "formatHelp": "Louez checks the number typed in and formats it.",
+            "formatFreeHelp": "Any text is accepted.",
+            "formats": {
+              "free": "Free text",
+              "br_cpf_cnpj": "CPF / CNPJ (Brazil)",
+              "es_dni_nie": "DNI / NIE (Spain)",
+              "it_codice_fiscale": "Codice fiscale (Italy)",
+              "pt_nif": "NIF (Portugal)"
+            }
+          },
+          "picker": {
+            "title": "Add a field",
+            "suggested": "Suggested templates",
+            "templates": "Templates",
+            "examples": {
+              "customer": {
+                "text": "Licence number",
+                "textarea": "Notes about the customer",
+                "number": "Years of practice",
+                "date": "Licence expiry date",
+                "select": "ID document type",
+                "checkbox": "Waiver signed",
+                "phone": "Emergency contact",
+                "email": "Billing email",
+                "url": "Link to a document"
+              },
+              "item": {
+                "text": "Locker number",
+                "textarea": "Setup preferences",
+                "number": "Height (cm)",
+                "date": "Rider's date of birth",
+                "select": "Level: beginner, advanced…",
+                "checkbox": "Child seat",
+                "phone": "Participant's phone",
+                "email": "Participant's email",
+                "url": "Link to the route"
+              }
+            }
+          },
+          "native": {
+            "fixed": "Louez field: its name and type are fixed."
+          },
+          "visibility": {
+            "shown": {
+              "customer": "Show on the record",
+              "item": "Show on the booking"
+            },
+            "shownHint": {
+              "customer": "Your team sees it and fills it in on every customer record.",
+              "item": "Your team fills it in for every rented item."
+            },
+            "hiddenHint": {
+              "customer": "Hidden: no longer on customer records. Its values are kept.",
+              "item": "Hidden: no longer on bookings. Its values are kept."
+            }
+          },
+          "online": {
+            "hiddenNote": "Hidden: customers are not asked for it. Show it to ask for it when they book."
+          },
+          "pageDescription": "The fields of your customer records, laid out as your forms show them.",
+          "preview": {
+            "open": "Customer preview",
+            "description": "What your customers fill in when they book online."
+          },
+          "layout": {
+            "title": "Layout"
+          },
+          "width": {
+            "label": "Width",
+            "full": "Full",
+            "half": "Half",
+            "fullLabel": "Full width",
+            "halfLabel": "Half width",
+            "hint": "Two half-width fields share a row.",
+            "fixed": "This field always takes the whole row."
+          },
+          "record": {
+            "customer": "On the record",
+            "item": "On the reservation"
+          },
+          "toasts": {
+            "applied": "Settings applied"
+          }
+        }
       }
     },
     "commandPalette": {
@@ -6081,6 +6885,7 @@
       "whatsNew": "What's new",
       "settings": "Settings",
       "settingsAdmin": "Administration",
+      "settingsBilling": "Billing",
       "settingsApi": "API",
       "settingsAppearance": "Appearance",
       "settingsDelivery": "Delivery",
@@ -6098,7 +6903,8 @@
       "settingsReviewBooster": "Review booster",
       "settingsTaxes": "Taxes",
       "productsEdit": "Edit",
-      "reservationsEdit": "Edit"
+      "reservationsEdit": "Edit",
+      "settingsCustomerFields": "Customer record"
     },
     "notificationsCenter": {
       "title": "Notifications",
@@ -6190,6 +6996,10 @@
         "optional-password": {
           "title": "A password, if you want one",
           "description": "Add a password to your account to sign in without waiting for the code sent by email. The code always stays available."
+        },
+        "customer-custom-fields": {
+          "title": "Customer records your way",
+          "description": "Add your own fields or start from a template by country and activity: licence, identity document, measurements, CPF…"
         }
       }
     },
@@ -6313,6 +7123,17 @@
       "sourceHint": "Browse the source code",
       "star": "Leave a star",
       "later": "Maybe later"
+    },
+    "reservationDetails": {
+      "itemDetails": {
+        "title": "Rental details",
+        "incomplete": "To complete",
+        "empty": "Nothing recorded yet",
+        "sheetDescription": "Who uses each item and what to get ready.",
+        "participantName": "Who is it for?",
+        "participantNamePlaceholder": "First name",
+        "saved": "Rental details saved"
+      }
     }
   },
   "storefront": {
@@ -6842,7 +7663,8 @@
         "contact": "Contact",
         "delivery": "Delivery",
         "address": "Address",
-        "confirm": "Confirmation"
+        "confirm": "Confirmation",
+        "details": "Rental details"
       },
       "deliveryDescription": "Choose how to receive and return your equipment",
       "deliveryRequiredDescription": "Delivery is required for this order",
@@ -7057,6 +7879,13 @@
         "title": "Your order could not be sent",
         "goToStep": "Fix this"
       },
+      "storePaused": {
+        "title": "Online booking is paused",
+        "description": "This store isn't taking online reservations right now.",
+        "descriptionNamed": "{storeName} isn't taking online reservations right now.",
+        "contactHint": "Contact the store directly to book these dates.",
+        "contactLater": "Please try again a little later."
+      },
       "payAmount": "Pay {amount}",
       "blocked": {
         "resolving": "Checking availability…",
@@ -7105,6 +7934,10 @@
           "unavailable": "Online payment is unavailable for this store.",
           "sessionFailed": "Payment could not be restarted. Try again in a moment."
         }
+      },
+      "customFields": {
+        "savedSummary": "Details already on file",
+        "detailsIntro": "This helps {store} get your equipment ready."
       }
     },
     "confirmation": {
@@ -7153,6 +7986,8 @@
       "redirecting": "Redirecting to payment...",
       "securePayment": "Secure payment by Stripe",
       "backToStore": "Back to store",
+      "acceptContractRich": "I have read and accept the <terms>rental terms and conditions</terms>",
+      "acceptContractRequired": "Accept the rental terms and conditions to continue.",
       "errors": {
         "expiredTitle": "Link expired",
         "expiredDescription": "This payment link has expired. Please contact the store to request a new one.",
@@ -7306,7 +8141,7 @@
       "signContract": "Sign contract",
       "contractSigned": "Contract signed",
       "downloadContract": "Download contract",
-      "signContractConfirmation": "By continuing, you confirm that you have read and accept this rental contract.",
+      "signContractConfirmation": "You accept the <contract>rental contract</contract> and the rental terms and conditions. The date and your IP address are recorded.",
       "signContractError": "The contract could not be signed. Please try again.",
       "invoiceDocuments": {
         "title": "Invoices and credit notes",
@@ -7653,6 +8488,17 @@
         "paymentDescription": "The store will be notified. If you have already paid or provided a deposit, contact the store for a refund or release. This action does not issue an automatic refund.",
         "adminSubject": "Request #{number} cancelled by the customer",
         "adminBody": "{name} cancelled booking request #{number} before your confirmation. You can view its history in your dashboard."
+      },
+      "customerFields": {
+        "title": "Additional information",
+        "description": "Requested by {store} when you book. Keep it up to date and you won’t have to type it again."
+      },
+      "rentalDetails": {
+        "title": "Rental details",
+        "editableHint": "You can change them until the rental starts.",
+        "toComplete": "To complete",
+        "saved": "Details saved",
+        "saveError": "Couldn’t save the details. Check the fields and try again."
       }
     },
     "marketplaceShell": {
@@ -7850,6 +8696,23 @@
       "breakdownTitle": "Price by season",
       "from": "From",
       "averageRate": "On average across your dates"
+    },
+    "customerFields": {
+      "optionalLabel": "{label} (optional)",
+      "sensitiveNote": "Only visible to {store}, to handle your booking.",
+      "suspicious": "This number doesn't look valid. Check it, or continue anyway.",
+      "participantLabel": "Who is it for?",
+      "participantPlaceholder": "First name (optional)",
+      "unitCounter": "{index} / {count}",
+      "unitEmpty": "Nothing filled in",
+      "recapValue": "{label}: {value}",
+      "profile": {
+        "title": "Profile",
+        "birthDate": "Date of birth",
+        "acquisitionSource": "How did you hear about us?",
+        "acquisitionSourceDetail": "Please specify",
+        "socialLinks": "Social and links"
+      }
     }
   },
   "onboarding": {
@@ -8087,6 +8950,7 @@
           "quietMonth": "A month without rentals: nothing to pay.",
           "subscription": "A monthly subscription if you rent a lot.",
           "switch": "Switch between the two whenever you like.",
+          "details": "Once your store is created, its billing settings show your offer in full.",
           "individualNote": "Rental income is yours to declare according to your situation; if the activity becomes professional, we'll ask you to switch status."
         }
       }
@@ -8199,10 +9063,10 @@
       "customerText": "I acknowledge that I have read and agree to the general rental terms and conditions without reservation.",
       "dateLabel": "Date:",
       "ipLabel": "IP:",
-      "automatic": "Automatically validated",
-      "automaticText": "Contract automatically validated when the reservation is confirmed or paid.",
       "atBooking": "Signed at booking",
       "atBookingText": "Rental terms accepted when booking online, which counts as signing this contract.",
+      "inStore": "Signed in store",
+      "signerLabel": "Signer:",
       "signedOnLabel": "Signed on:",
       "validatedOnLabel": "Validated on:"
     },
@@ -8323,7 +9187,10 @@
     }
   },
   "errors": {
+    "storeNotAcceptingReservations": "This store isn't taking reservations online right now. {hasContact, select, yes {Contact the store: {contact}} other {Please contact the store directly.}}",
     "generic": "An error occurred",
+    "contractNotSignable": "This contract can no longer be signed.",
+    "contractSignatureRequired": "This store requires the customer to sign their contract before pickup.",
     "pageLoadError": "We couldn't load this page. Please try again.",
     "notFound": "Page not found",
     "notFoundDescription": "The page you're looking for doesn't exist or has been moved.",
@@ -8339,6 +9206,10 @@
     "integrationCategoryNotFound": "Integration category not found",
     "integrationNotConnected": "Integration not connected",
     "unsupportedOperation": "Unsupported operation",
+    "planPaymentFailed": "Your card was declined, so the difference could not be charged. Your plan has not changed. Update your card from “View my invoices”, then try again.",
+    "planPaymentConfirmationRequired": "Your bank is asking to confirm the payment of the difference, which cannot be done from this page. Your plan has not changed. Add another card from “View my invoices”, then try again, or contact support.",
+    "planNoPaymentMethod": "There is no card on file, so the difference could not be charged. Your plan has not changed. Add a card from “View my invoices”, then try again.",
+    "planChangeNoLongerPending": "This plan change is no longer waiting: it has already started, or it was dropped. The page now shows your current plan.",
     "permissionDenied": "Insufficient permission",
     "customerNotFound": "Customer not found",
     "reservationNotFound": "Reservation not found",
@@ -8510,7 +9381,22 @@
     "requestCancellationPaymentChanged": "The payment information has changed. Review it before confirming cancellation again.",
     "promoCodeProductsAlreadyDiscounted": "This code does not apply to products already on promotion.",
     "paymentAmountTooSmall": "Card payments require a minimum of {minimumAmount, number} {currency}. Update your cart or contact the store.",
-    "checkoutPaymentFailed": "Payment could not start. Your reservation was not confirmed. Try again or contact the store."
+    "checkoutPaymentFailed": "Payment could not start. Your reservation was not confirmed. Try again or contact the store.",
+    "customFieldsInvalid": "Some additional fields are invalid.",
+    "optionsRequired": "Add at least one choice.",
+    "customerFields": {
+      "tooManyFields": "You reached the maximum number of active fields. Archive one to add another.",
+      "tooManySearchable": "Up to five fields can be included in search.",
+      "tooManyListFields": "Up to two fields can be shown in the list."
+    },
+    "customFieldRequired": "Please fill in “{field}”.",
+    "customFieldInvalid": "“{field}” is not valid.",
+    "itemDetailRequired": "Please fill in “{field}” for {product} (no. {unit}).",
+    "itemDetailInvalid": "“{field}” is not valid for {product} (no. {unit}).",
+    "reservationDetailsLocked": "These details can no longer be changed: the rental has started or ended.",
+    "customerNotAuthenticated": "Sign in to your customer account to continue.",
+    "profileFieldRequired": "Please fill in “{field}”.",
+    "profileFieldInvalid": "“{field}” is not valid."
   },
   "welcome": {
     "greeting": "Welcome to Louez.io",

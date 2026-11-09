@@ -2,6 +2,7 @@ import { supplementalMessages } from "@louez/email/messages";
 import { headers } from "next/headers";
 
 import { betterAuth } from "better-auth";
+import { passkey } from "@better-auth/passkey";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { toNextJsHandler } from "better-auth/next-js";
@@ -28,11 +29,13 @@ import {
   getAccountDeletionReasonFromRequest,
   type AccountDeletionReason,
 } from "./account-deletion";
+import { accountDeletionRequestBefore } from "./account-deletion-request";
 import { env } from "./env";
 import { sendPasswordChangedNotice } from "./password-notice";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "./password-policy";
 import { authIpAddressOptions, authRateLimitOptions } from "./rate-limit";
 import { getLocaleFromHeaders } from "./request-locale";
+import { createPasskeyOptions, passkeyAfter, passkeyBefore } from "./passkey";
 
 // Standalone (self-host) deployments make email + password the primary
 // sign-in so the first owner can create an account with zero external
@@ -130,6 +133,27 @@ const AUTH_COOKIE_PREFIX = dbEnv.DATABASE_URL.endsWith(PROD_DATABASE_SUFFIX)
     ? "louez-dev"
     : "better-auth";
 
+/**
+ * In development the app answers on every Localify host of the project: the
+ * namespace, each worktree and storefront under it, and its Localify Cloud
+ * public URLs. Better Auth then takes its base URL, and the origin it trusts,
+ * from the host a request came in on, read from X-Forwarded-Host, among these
+ * hosts only; any other host falls back to AUTH_URL. So a new worktree or a
+ * public URL works without editing AUTH_URL. Production keeps the fixed
+ * AUTH_URL.
+ */
+const DEV_AUTH_HOSTS = [
+  "louez.localify",
+  "*.louez.localify",
+  "louez.localify.fyi",
+  "louez--*.localify.fyi",
+];
+
+const authBaseURL =
+  env.NODE_ENV === "development"
+    ? { allowedHosts: DEV_AUTH_HOSTS, fallback: env.AUTH_URL }
+    : env.AUTH_URL;
+
 // ============================================================================
 // Auth instance (direct — no factory/singleton)
 // ============================================================================
@@ -137,7 +161,7 @@ const AUTH_COOKIE_PREFIX = dbEnv.DATABASE_URL.endsWith(PROD_DATABASE_SUFFIX)
 export const authInstance = betterAuth({
   basePath: "/api/auth",
   secret: env.AUTH_SECRET,
-  baseURL: env.AUTH_URL,
+  baseURL: authBaseURL,
   trustedOrigins: [env.AUTH_URL],
 
   database: drizzleAdapter(db, {
@@ -148,6 +172,7 @@ export const authInstance = betterAuth({
       session: schema.sessions,
       verification: schema.verification,
       rateLimit: schema.authRateLimits,
+      passkey: schema.passkeyTable,
     },
   }),
 
@@ -205,26 +230,8 @@ export const authInstance = betterAuth({
               { user, token }: { user: { id: string; email: string }; token: string },
               request?: Request,
             ) => {
-              if (!_userDeleteRequestHook) {
-                throw new APIError("SERVICE_UNAVAILABLE", {
-                  message: "Account deletion is temporarily unavailable",
-                  code: "ACCOUNT_DELETION_UNAVAILABLE",
-                });
-              }
-              try {
-                await _userDeleteRequestHook({ userId: user.id });
-              } catch {
-                throw new APIError("SERVICE_UNAVAILABLE", {
-                  message: "Account deletion is temporarily unavailable",
-                  code: "ACCOUNT_DELETION_UNAVAILABLE",
-                });
-              }
-              if (!isEmailConfigured()) {
-                throw new APIError("SERVICE_UNAVAILABLE", {
-                  message: "Account deletion email is unavailable",
-                  code: "ACCOUNT_DELETION_EMAIL_UNAVAILABLE",
-                });
-              }
+              // The checks that can refuse this request run in hooks.before:
+              // an error thrown here never reaches the client.
               const locale = getLocaleFromHeaders(
                 request ? new Headers(request.headers) : new Headers(),
               );
@@ -278,6 +285,15 @@ export const authInstance = betterAuth({
     // Changing a password always signs the other devices out, whatever the
     // caller sent: the flag is not left to the client's good will.
     before: createAuthMiddleware(async (ctx) => {
+      await passkeyBefore(ctx);
+      // A deletion request is refused here, before the route answers: see
+      // account-deletion-request.ts for why the e-mail sender cannot do it.
+      if (!isStandaloneMode) {
+        await accountDeletionRequestBefore(ctx, {
+          requestHook: _userDeleteRequestHook,
+          emailConfigured: isEmailConfigured(),
+        });
+      }
       if (ctx.path !== "/change-password") return;
       return {
         context: {
@@ -287,6 +303,7 @@ export const authInstance = betterAuth({
       };
     }),
     after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path.startsWith("/passkey/")) return passkeyAfter(ctx);
       if (ctx.path !== "/change-password") return;
       if (ctx.context.returned instanceof APIError) return;
 
@@ -301,6 +318,7 @@ export const authInstance = betterAuth({
   },
 
   plugins: [
+    passkey(createPasskeyOptions(env.AUTH_URL)),
     magicLink({
       sendMagicLink: async ({ email, url }, ctx) => {
         const reqHeaders = ctx?.request ? new Headers(ctx.request.headers) : new Headers();

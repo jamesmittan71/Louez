@@ -18,11 +18,11 @@ import { useStripeStep } from "./use-stripe-step";
  * the very marketplace they signed up for. The step keeps `payment` mode and
  * only asks when: now, or later from the dashboard.
  */
-export const ReeentStripeClientPage = ({ nextPath }: { nextPath: string }) => {
+export const ReeentStripeClientPage = () => {
   const router = useRouter();
   const t = useTranslations("onboarding.stripe");
   const tCommon = useTranslations("common");
-  const { form, isPending } = useStripeStep({ nextPath });
+  const { form, isPending, isNavigating } = useStripeStep();
   const { startStripeConnect, isConnecting, hasPendingAccount } = useStripeConnectStart({
     fromReeent: true,
   });
@@ -70,7 +70,12 @@ export const ReeentStripeClientPage = ({ nextPath }: { nextPath: string }) => {
                 {t(hasPendingAccount ? "panel.payment.resumeNow" : "panel.payment.configureNow")}
               </Button>
             </div>
-            <form.SubscribeButton variant="ghost" className="w-full" disabled={isConnecting}>
+            <form.SubscribeButton
+              variant="ghost"
+              className="w-full"
+              disabled={isConnecting}
+              isPending={isNavigating}
+            >
               {t("reeent.later")}
             </form.SubscribeButton>
             <p className="text-muted-foreground text-xs leading-relaxed">{t("reeent.laterNote")}</p>

@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { redirect } from "next/navigation";
 
 import { getTranslations } from "next-intl/server";
@@ -9,6 +10,7 @@ import { ReferralLink } from "@/app/(dashboard)/dashboard/referrals/referral-lin
 import { ReferralStats } from "@/app/(dashboard)/dashboard/referrals/referral-stats";
 import { ReferralsList } from "@/app/(dashboard)/dashboard/referrals/referrals-list";
 import { SettingsPageShell } from "@/components/dashboard/settings-page-shell";
+import { requireLegacyBilling, requirePlatformBilling } from "@/lib/billing/require-billing";
 import { getCurrentStore } from "@/lib/store-context";
 
 // TODO: Cache Components adoption. Refactor this route so this opt-out can be removed.
@@ -16,10 +18,16 @@ import { getCurrentStore } from "@/lib/store-context";
 export const instant = false;
 
 const SettingsReferralsPage = async () => {
+  // Read LOUEZ_BILLING at request time: before a dynamic API, Cache Components
+  // would run this check during the build, which has no LOUEZ_BILLING, and serve a 404.
+  await connection();
+  requirePlatformBilling();
   const store = await getCurrentStore();
   if (!store) {
     redirect("/onboarding");
   }
+  // The rewards are credits on Louez's own billing (maybeGrantReferrerReward).
+  await requireLegacyBilling(store.id);
 
   const t = await getTranslations("dashboard.referrals");
   const data = await getReferralData();
@@ -35,7 +43,6 @@ const SettingsReferralsPage = async () => {
       actions={
         <ReferralHowItWorks
           referrerReward={data.program.referrerReward}
-          referredReward={data.program.referredReward}
           referrerRewardKind={data.program.referrerRewardKind}
           minQualifyingAmountCents={data.program.minQualifyingAmountCents}
           currency={data.program.currency}

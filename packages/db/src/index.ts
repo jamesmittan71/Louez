@@ -1,3 +1,5 @@
+import { hostname } from "node:os";
+
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import * as schema from "./schema";
@@ -18,8 +20,16 @@ const pool =
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
+    // A pooled connection can sit idle for long at night, and Docker Swarm's network
+    // drops one after 15 idle minutes without telling either end. A query sent on it
+    // then waits about 15 minutes for Linux to give up. A probe after one idle minute
+    // keeps it open. 0 would leave the OS default, two hours.
     enableKeepAlive: true,
-    keepAliveInitialDelay: 0,
+    keepAliveInitialDelay: 60_000,
+    // Names the machine in MySQL's performance_schema.session_connect_attrs: behind
+    // Docker Swarm's ingress, a client that comes through a published port shows the
+    // ingress's address, not its own.
+    connectAttributes: { program_name: `louez@${hostname()}` },
   });
 
 // In development, cache the pool to avoid "Too many connections" errors
@@ -30,11 +40,24 @@ if (env.NODE_ENV !== "production") {
 export const db = drizzle(pool, { schema, mode: "default" });
 
 export type Database = typeof db;
+
+/**
+ * Drizzle on one connection taken from the pool: its queries and transactions all run
+ * on that connection. For work under a MySQL named lock, which belongs to the
+ * connection that took it, so the work needs no second connection from the pool.
+ */
+export function databaseOnConnection(connection: mysql.PoolConnection) {
+  return drizzle(connection, { schema, mode: "default" });
+}
+
+export type DatabaseOnConnection = ReturnType<typeof databaseOnConnection>;
 export { cancelFailedCheckoutReservation } from "./failed-checkout";
 export type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 // Re-export schema for convenience
 export * from "./schema";
+export * from "./billing-queue";
+export * from "./billing-policy";
 export {
   activeProductUnitCountSql,
   effectiveProductQuantitySql,
@@ -73,6 +96,38 @@ export type {
   ConsumableStockMutationPlan,
   StockKindChangeBlocker,
 } from "./consumable-stock";
+export {
+  BILLABLE_RESERVATION_STATUSES,
+  changeReservationStatus,
+  invalidReservationTransitionMessage,
+  isBillableReservationStatus,
+  isFeeVoidingReservationStatus,
+  requiresReservationGate,
+  toWholeSeconds,
+} from "./reservation-status";
+export {
+  STORE_NOT_ACCEPTING_RESERVATIONS,
+  StoreNotAcceptingReservationsError,
+  assertStoreCanTakeReservations,
+  isStoreNotAcceptingReservationsError,
+  readReservationGate,
+  readStoresNotAcceptingReservations,
+} from "./reservation-gate";
+export type { ReservationGate, ReservationGateReason } from "./reservation-gate";
+export type {
+  ChangeReservationStatusInput,
+  ChangeReservationStatusResult,
+  ReservationActivityType,
+  ReservationActor,
+  ReservationBillingEffect,
+  ReservationEffectRunner,
+  ReservationStatus,
+  ReservationStatusRefusal,
+} from "./reservation-status";
+export { initialBillableAt, insertReservation } from "./reservation-insert";
+export type { ReservationInsertValues } from "./reservation-insert";
+export { countBillableReservationsWithoutBillableAt } from "./reservation-invariants";
+export { isDuplicateKeyError } from "./duplicate-key";
 
 export { SLUG_MAX_LENGTH, isSlug, pickUniqueSlug, slugify } from "./slug";
 export { nextCategorySlug, nextProductSlug } from "./slugs";

@@ -1,34 +1,61 @@
-import { and, desc, eq, inArray, ne, or, sql } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
+import { and, asc, desc, eq, gt, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { after } from "next/server";
 
-import { db } from '@louez/db';
+import {
+  type Database,
+  type DatabaseOnConnection,
+  type PolicyExecutor,
+  db,
+  isBillingSyncEnabled,
+  isDuplicateKeyError,
+  legacyBilledStoreIds,
+  legacyBillingAppliesAt,
+  markBillingDirty,
+  type MarkExecutor,
+  type PolicyInvoicing,
+  type PolicySource,
+} from "@louez/db";
 import {
   payAsYouGoInvoices,
+  payments,
   platformFees,
+  reservations,
   storeMarketplaceChannels,
   stores,
   subscriptions,
-} from '@louez/db';
-import type { BillingMode } from '@louez/types';
+} from "@louez/db";
+import type { BillingMode } from "@louez/types";
 
+import { type FeeCharge, feeAtSource } from "@/lib/billing/fees";
+import { isBillingEnabled } from "@/lib/billing/mode";
+import { type EffectivePolicy, getCachedPolicy, getEffectivePolicy } from "@/lib/billing/policy";
+import { type BillingAlerts, createBillingAlerts } from "@/lib/billing-sync/alerts";
+import {
+  buildFeeMetadataV4,
+  type FeeAtSource,
+  readFeeMetadata,
+  type FeeMetadataV4Input,
+  type PolicyScope,
+} from "@/lib/billing-sync/fee-metadata";
+import { log } from "@/lib/evlog";
+
+import { billingMonthEnd } from "./billing-core";
 import {
   type ResolvedPayAsYouGoConfig,
   priceForLocationIndex,
-  resolvePayAsYouGoConfig,
   summarizePayAsYouGoBands,
-} from './config';
-import {
-  getDefaultFreeReservations,
-  getDefaultPayAsYouGoConfigSnapshot,
-} from './defaults';
+} from "./config";
+import { splitFeeRefund } from "./fee-refund-core";
+import { resolveStorePricing } from "./pricing-lock-core";
 import {
   MARKETPLACE_FEE_CENTS,
   decideMarketplaceFeeRecord,
   type MarketplaceFeeCollectionSource,
-} from './marketplace-fee-core';
+} from "./marketplace-fee-core";
 
 /** Fee statuses that count toward a store's owed/collected totals (not voided/reversed). */
-export const ACTIVE_FEE_STATUSES = ['pending', 'collected', 'billed'] as const;
+export const ACTIVE_FEE_STATUSES = ["pending", "collected", "billed"] as const;
 
 /** Idempotency key for the ledger (unique `dedup_key`): one row per reservation. */
 const reservationFeeKey = (reservationId: string) => `res:${reservationId}`;
@@ -52,8 +79,8 @@ async function countFreeReservationsUsed(storeId: string): Promise<number> {
     .where(
       and(
         eq(platformFees.storeId, storeId),
-        eq(platformFees.source, 'free'),
-        ne(platformFees.status, 'voided'),
+        eq(platformFees.source, "free"),
+        ne(platformFees.status, "voided"),
       ),
     );
   return Number(value) || 0;
@@ -73,7 +100,7 @@ export async function getStoreBillingPreferences(
     columns: { settings: true },
   });
   return {
-    currency: (store?.settings?.currency || 'eur').toLowerCase().slice(0, 3),
+    currency: (store?.settings?.currency || "eur").toLowerCase().slice(0, 3),
     country: store?.settings?.country ?? null,
   };
 }
@@ -89,10 +116,15 @@ export async function getStoreCurrency(storeId: string): Promise<string> {
   return currency;
 }
 
+/** Stores already reported as unfrozen, so the error is logged once per process. */
+const reportedUnfrozenStores = new Set<string>();
+
 /**
- * Resolve a store's billing mode + fee configs. Stores with no subscription row
- * default to subscription mode with the platform default fee configs. The PAYG
- * pricing currency always reflects the store's own currency (same tariff in EUR/USD/…).
+ * Resolve a store's billing mode and pay-as-you-go pricing from its own subscription row.
+ * The env offer for new stores is never read here: a store without a row or without a
+ * stored config (the pricing freeze has not reached it) gets the frozen legacy terms, and
+ * an error is logged. The PAYG pricing currency always follows the store's own currency
+ * (same tariff in EUR/USD/…).
  */
 export async function getStoreBilling(storeId: string): Promise<StoreBilling> {
   const [subscription, currency, freeUsed] = await Promise.all([
@@ -108,46 +140,94 @@ export async function getStoreBilling(storeId: string): Promise<StoreBilling> {
     countFreeReservationsUsed(storeId),
   ]);
 
-  // No per-store override → fall back to the platform default offer from
-  // PAYG_DEFAULT_PRICING (env), then to the hardcoded ladder. This makes the env var
-  // the live default for every store without its own stored config (e.g. legacy
-  // accounts), instead of silently using the hardcoded ladder.
-  const config = resolvePayAsYouGoConfig(
-    subscription?.payAsYouGoConfig ?? getDefaultPayAsYouGoConfigSnapshot(currency),
-  );
-  config.currency = currency;
-
-  // A store with no subscription row is a legacy / free-tier account. The free plan no
-  // longer exists, so the platform default is pay-as-you-go: default the billing mode AND
-  // the free-reservation allowance to the env-driven platform defaults. This mirrors how
-  // getPlanSlug / getDefaultPlan already treat a missing subscription as pay-as-you-go, and
-  // it makes the subscription page show the PAYG view (not the plan grid) for these stores.
-  const freeReservationsGranted =
-    subscription?.freeReservationsGranted ?? getDefaultFreeReservations();
+  const pricing = resolveStorePricing(subscription, currency);
+  // Only an instance that bills its stores freezes their pricing: without billing, new
+  // stores get no row and nothing is charged, so there is nothing to report. Nor for a
+  // store the billing service bills, which never has frozen pricing (README §8.3).
+  if (!pricing.frozen && isBillingEnabled() && !reportedUnfrozenStores.has(storeId)) {
+    reportedUnfrozenStores.add(storeId);
+    if (await legacyBillingAppliesAt(db, storeId, new Date())) {
+      log.error(
+        "billing",
+        `store ${storeId} has no frozen pay-as-you-go pricing (${subscription ? "no config" : "no subscription row"}); using the legacy terms. Run the pricing freeze.`,
+      );
+    }
+  }
 
   return {
-    billingMode: subscription?.billingMode ?? 'pay_as_you_go',
-    config,
-    freeReservationsGranted,
-    freeReservationsRemaining: Math.max(0, freeReservationsGranted - freeUsed),
+    billingMode: pricing.billingMode,
+    config: pricing.config,
+    freeReservationsGranted: pricing.freeReservationsGranted,
+    freeReservationsRemaining: Math.max(0, pricing.freeReservationsGranted - freeUsed),
   };
 }
 
 export async function isPayAsYouGo(storeId: string): Promise<boolean> {
   const { billingMode } = await getStoreBilling(storeId);
-  return billingMode === 'pay_as_you_go';
+  return billingMode === "pay_as_you_go";
 }
 
 /** Billing month bucket as `YYYY-MM` (UTC). */
 export function billingMonthOf(date: Date): string {
   const year = date.getUTCFullYear();
-  const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+  const month = (date.getUTCMonth() + 1).toString().padStart(2, "0");
   return `${year}-${month}`;
 }
 
-function isDuplicateError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes('Duplicate') || message.includes('unique');
+/**
+ * Marks the billing aggregates a fee row write changes: its store's month, its
+ * reservation (an older Stripe payment reads its fee taken at source from the row) and,
+ * for a free row, the store's free credits. Call it in the write's transaction.
+ */
+async function markFeeRows(
+  executor: MarkExecutor,
+  rows: ReadonlyArray<{
+    storeId: string;
+    reservationId: string;
+    billingMonth: string;
+    source?: string;
+  }>,
+): Promise<void> {
+  // One statement, so the queue rows are locked in markBillingDirty's fixed order.
+  await markBillingDirty(
+    executor,
+    rows.flatMap((row) => [
+      {
+        type: "legacy_month" as const,
+        aggregateId: `${row.storeId}:${row.billingMonth}`,
+        storeId: row.storeId,
+      },
+      ...(row.source === "free"
+        ? [{ type: "legacy_store" as const, aggregateId: row.storeId, storeId: row.storeId }]
+        : []),
+      { type: "reservation" as const, aggregateId: row.reservationId, storeId: row.storeId },
+    ]),
+  );
+}
+
+/**
+ * The fee rows the monthly run bills: those whose store Louez's legacy code bills at
+ * the end of the row's month, as the run reads it (monthlyBillingStoreIds, README
+ * §8.3). Read in the write's transaction, so a cancellation or a fee refund changes a
+ * row the run invoices, also after the billing service took the store over, and keeps
+ * any other row as it is.
+ */
+async function rowsBilledByTheMonthlyRun<
+  Row extends { readonly storeId: string; readonly billingMonth: string },
+>(executor: PolicyExecutor, rows: readonly Row[]): Promise<Row[]> {
+  const kept: Row[] = [];
+  for (const billingMonth of new Set(rows.map((row) => row.billingMonth))) {
+    const ofMonth = rows.filter((row) => row.billingMonth === billingMonth);
+    const legacy = new Set(
+      await legacyBilledStoreIds(
+        executor,
+        [...new Set(ofMonth.map((row) => row.storeId))],
+        billingMonthEnd(billingMonth),
+      ),
+    );
+    kept.push(...ofMonth.filter((row) => legacy.has(row.storeId)));
+  }
+  return kept;
 }
 
 // ============================================================================
@@ -157,7 +237,7 @@ function isDuplicateError(error: unknown): boolean {
 interface RecordReservationFeeInput {
   storeId: string;
   reservationId: string;
-  source: 'online' | 'manual';
+  source: "online" | "manual";
   /** Actual reservation fee collected at source (online). Required for `online`. */
   collectedAmountCents?: number;
   paymentId?: string | null;
@@ -175,50 +255,69 @@ interface RecordReservationFeeInput {
  * - While the store has free-reservation credits, the rental is WAIVED: recorded with
  *   `source='free'`, amount 0, outside the graduated ladder.
  * - A manual `pending` row is upgraded to `collected` if the fee is later collected at
- *   source (prevents double billing).
+ *   source (prevents double billing), while the monthly run bills the row's month.
+ * - No-op, without touching the database, when platform billing is off.
+ * - No new row for a store the billing service bills at `at`, the time of the fact
+ *   (louez-billing docs/api, README §8.3).
  */
 export async function recordReservationFee(
   input: RecordReservationFeeInput,
 ): Promise<{ recorded: boolean; reason?: string }> {
-  const billing = input.billing ?? (await getStoreBilling(input.storeId));
-  if (billing.billingMode !== 'pay_as_you_go') {
-    return { recorded: false, reason: 'not_pay_as_you_go' };
-  }
-
+  if (!isBillingEnabled()) return { recorded: false, reason: "billing_off" };
+  const at = input.at ?? new Date();
   const dedupKey = reservationFeeKey(input.reservationId);
   const existing = await db.query.platformFees.findFirst({
     where: eq(platformFees.dedupKey, dedupKey),
-    columns: { id: true, status: true, source: true },
+    columns: {
+      id: true,
+      status: true,
+      source: true,
+      storeId: true,
+      reservationId: true,
+      billingMonth: true,
+    },
   });
-  if (existing) {
-    if (
-      input.source === 'online' &&
-      (input.collectedAmountCents ?? 0) > 0 &&
-      existing.status === 'pending' &&
-      existing.source === 'manual'
-    ) {
-      await db
-        .update(platformFees)
-        .set({
-          source: 'online',
-          status: 'collected',
-          amountCents: Math.max(0, Math.round(input.collectedAmountCents ?? 0)),
-          paymentId: input.paymentId ?? null,
-          stripePaymentIntentId: input.stripePaymentIntentId ?? null,
-          stripeApplicationFeeId: input.stripeApplicationFeeId ?? null,
-          updatedAt: new Date(),
-        })
-        .where(eq(platformFees.id, existing.id));
-      return { recorded: true, reason: 'upgraded_to_collected' };
-    }
-    return { recorded: false, reason: 'already_recorded' };
+  if (!existing && !(await legacyBillingAppliesAt(db, input.storeId, at))) {
+    return { recorded: false, reason: "not_legacy_billed" };
+  }
+  const billing = input.billing ?? (await getStoreBilling(input.storeId));
+  if (billing.billingMode !== "pay_as_you_go") {
+    return { recorded: false, reason: "not_pay_as_you_go" };
   }
 
-  const at = input.at ?? new Date();
+  if (existing) {
+    if (
+      input.source === "online" &&
+      (input.collectedAmountCents ?? 0) > 0 &&
+      existing.status === "pending" &&
+      existing.source === "manual"
+    ) {
+      const upgraded = await db.transaction(async (tx) => {
+        if ((await rowsBilledByTheMonthlyRun(tx, [existing])).length === 0) return false;
+        await tx
+          .update(platformFees)
+          .set({
+            source: "online",
+            status: "collected",
+            amountCents: Math.max(0, Math.round(input.collectedAmountCents ?? 0)),
+            paymentId: input.paymentId ?? null,
+            stripePaymentIntentId: input.stripePaymentIntentId ?? null,
+            stripeApplicationFeeId: input.stripeApplicationFeeId ?? null,
+            updatedAt: new Date(),
+          })
+          .where(eq(platformFees.id, existing.id));
+        await markFeeRows(tx, [existing]);
+        return true;
+      });
+      return upgraded
+        ? { recorded: true, reason: "upgraded_to_collected" }
+        : { recorded: false, reason: "not_legacy_billed" };
+    }
+    return { recorded: false, reason: "already_recorded" };
+  }
+
   const billingMonth = billingMonthOf(at);
-  const currency = (input.currency || billing.config.currency || 'eur')
-    .toLowerCase()
-    .slice(0, 3);
+  const currency = (input.currency || billing.config.currency || "eur").toLowerCase().slice(0, 3);
 
   try {
     let recordedFree = false;
@@ -237,8 +336,8 @@ export async function recordReservationFee(
         .where(
           and(
             eq(platformFees.storeId, input.storeId),
-            eq(platformFees.source, 'free'),
-            ne(platformFees.status, 'voided'),
+            eq(platformFees.source, "free"),
+            ne(platformFees.status, "voided"),
           ),
         );
       const isFree = Number(freeUsed) < billing.freeReservationsGranted;
@@ -252,13 +351,21 @@ export async function recordReservationFee(
           dedupKey,
           amountCents: 0,
           currency,
-          source: 'free',
-          status: 'collected', // settled: nothing owed, nothing collected
+          source: "free",
+          status: "collected", // settled: nothing owed, nothing collected
           billingMonth,
           monthlyIndex: null,
           stripePaymentIntentId: input.stripePaymentIntentId ?? null,
           stripeApplicationFeeId: input.stripeApplicationFeeId ?? null,
         });
+        await markFeeRows(tx, [
+          {
+            storeId: input.storeId,
+            reservationId: input.reservationId,
+            billingMonth,
+            source: "free",
+          },
+        ]);
         recordedFree = true;
         return;
       }
@@ -271,7 +378,7 @@ export async function recordReservationFee(
         .where(
           and(
             eq(platformFees.storeId, input.storeId),
-            inArray(platformFees.source, ['online', 'manual']),
+            inArray(platformFees.source, ["online", "manual"]),
             eq(platformFees.billingMonth, billingMonth),
             eq(platformFees.currency, currency),
             inArray(platformFees.status, [...ACTIVE_FEE_STATUSES]),
@@ -280,7 +387,7 @@ export async function recordReservationFee(
       const monthlyIndex = Number(priorPaid) + 1;
 
       const amountCents =
-        input.source === 'online'
+        input.source === "online"
           ? Math.max(0, Math.round(input.collectedAmountCents ?? 0))
           : priceForLocationIndex(billing.config, monthlyIndex);
 
@@ -293,17 +400,20 @@ export async function recordReservationFee(
         amountCents,
         currency,
         source: input.source,
-        status: input.source === 'online' ? 'collected' : 'pending',
+        status: input.source === "online" ? "collected" : "pending",
         billingMonth,
         monthlyIndex,
         stripePaymentIntentId: input.stripePaymentIntentId ?? null,
         stripeApplicationFeeId: input.stripeApplicationFeeId ?? null,
       });
+      await markFeeRows(tx, [
+        { storeId: input.storeId, reservationId: input.reservationId, billingMonth },
+      ]);
     });
-    if (recordedFree) return { recorded: true, reason: 'free' };
+    if (recordedFree) return { recorded: true, reason: "free" };
   } catch (error) {
-    if (isDuplicateError(error)) {
-      return { recorded: false, reason: 'already_recorded' };
+    if (isDuplicateKeyError(error)) {
+      return { recorded: false, reason: "already_recorded" };
     }
     throw error;
   }
@@ -316,29 +426,54 @@ export async function recordReservationFee(
  * (`pending`) fee, AND a waived (`free`) fee — voiding a free row restores the store's
  * free-reservation credit. Online fees already collected at source are reversed via the
  * refund webhook (the money is real), so they are surfaced rather than voided.
+ * No-op when platform billing is off, and for a row the monthly run does not bill: its
+ * store is billed by the billing service at the end of the row's month (louez-billing
+ * docs/api, README §8.3).
  */
-export async function voidReservationFee(
-  reservationId: string,
-): Promise<{ voided: boolean }> {
-  const result = await db
-    .update(platformFees)
-    .set({ status: 'voided', updatedAt: new Date() })
-    .where(
-      and(
-        or(
-          eq(platformFees.dedupKey, reservationFeeKey(reservationId)),
-          eq(platformFees.dedupKey, marketplaceFeeKey(reservationId)),
+export async function voidReservationFee(reservationId: string): Promise<{ voided: boolean }> {
+  if (!isBillingEnabled()) return { voided: false };
+  const voidable = and(
+    or(
+      eq(platformFees.dedupKey, reservationFeeKey(reservationId)),
+      eq(platformFees.dedupKey, marketplaceFeeKey(reservationId)),
+    ),
+    ne(platformFees.status, "voided"),
+    or(
+      eq(platformFees.status, "pending"),
+      eq(platformFees.source, "free"),
+      eq(platformFees.source, "marketplace_waived"),
+    ),
+  );
+  // The rows are read first for their store and month, which the marks need.
+  const affectedRows = await db.transaction(async (tx) => {
+    const locked = await tx
+      .select({
+        id: platformFees.id,
+        storeId: platformFees.storeId,
+        reservationId: platformFees.reservationId,
+        billingMonth: platformFees.billingMonth,
+        source: platformFees.source,
+      })
+      .from(platformFees)
+      .where(voidable)
+      .for("update");
+    const rows = await rowsBilledByTheMonthlyRun(tx, locked);
+    if (rows.length === 0) return 0;
+    const result = await tx
+      .update(platformFees)
+      .set({ status: "voided", updatedAt: new Date() })
+      .where(
+        and(
+          inArray(
+            platformFees.id,
+            rows.map((row) => row.id),
+          ),
+          voidable,
         ),
-        ne(platformFees.status, 'voided'),
-        or(
-          eq(platformFees.status, 'pending'),
-          eq(platformFees.source, 'free'),
-          eq(platformFees.source, 'marketplace_waived'),
-        ),
-      ),
-    );
-
-  const affectedRows = result[0]?.affectedRows ?? 0;
+      );
+    await markFeeRows(tx, rows);
+    return result[0]?.affectedRows ?? 0;
+  });
 
   // Nothing voided: if a fee was already collected at source (paid) or billed at
   // month-end, it can't simply be voided. Surface it so a cancellation that also refunds
@@ -349,11 +484,11 @@ export async function voidReservationFee(
       columns: { status: true, source: true },
     });
     if (
-      existing?.source !== 'free' &&
-      (existing?.status === 'collected' || existing?.status === 'billed')
+      existing?.source !== "free" &&
+      (existing?.status === "collected" || existing?.status === "billed")
     ) {
       console.warn(
-        '[payg] reservation fee not voided — already collected/billed; reverse via a refund if the customer is refunded',
+        "[payg] reservation fee not voided — already collected/billed; reverse via a refund if the customer is refunded",
         { reservationId, status: existing?.status },
       );
     }
@@ -363,13 +498,11 @@ export async function voidReservationFee(
 }
 
 /** Whether a (non-voided) reservation fee already exists for this reservation. */
-export async function hasReservationFee(
-  reservationId: string,
-): Promise<boolean> {
+export async function hasReservationFee(reservationId: string): Promise<boolean> {
   const existing = await db.query.platformFees.findFirst({
     where: and(
       eq(platformFees.dedupKey, reservationFeeKey(reservationId)),
-      ne(platformFees.status, 'voided'),
+      ne(platformFees.status, "voided"),
     ),
     columns: { id: true },
   });
@@ -385,26 +518,19 @@ export interface StripeFeePlan {
   marketplaceFeeCents: number;
 }
 
-export async function hasMarketplaceLifetimeFeeWaiver(
-  storeId: string,
-): Promise<boolean> {
+export async function hasMarketplaceLifetimeFeeWaiver(storeId: string): Promise<boolean> {
   const channel = await db.query.storeMarketplaceChannels.findFirst({
     where: eq(storeMarketplaceChannels.storeId, storeId),
     columns: { lifetimeFeeWaiverAt: true },
   });
-  return (
-    channel?.lifetimeFeeWaiverAt !== null &&
-    channel?.lifetimeFeeWaiverAt !== undefined
-  );
+  return channel?.lifetimeFeeWaiverAt !== null && channel?.lifetimeFeeWaiverAt !== undefined;
 }
 
-export async function hasMarketplaceFee(
-  reservationId: string,
-): Promise<boolean> {
+export async function hasMarketplaceFee(reservationId: string): Promise<boolean> {
   const existing = await db.query.platformFees.findFirst({
     where: and(
       eq(platformFees.dedupKey, marketplaceFeeKey(reservationId)),
-      ne(platformFees.status, 'voided'),
+      ne(platformFees.status, "voided"),
     ),
     columns: { id: true },
   });
@@ -422,15 +548,27 @@ export async function recordMarketplaceFee(input: {
   currency?: string | null;
   at?: Date;
 }): Promise<{ recorded: boolean; reason?: string }> {
+  if (!isBillingEnabled()) return { recorded: false, reason: "billing_off" };
+  const at = input.at ?? new Date();
   const dedupKey = marketplaceFeeKey(input.reservationId);
   const existing = await db.query.platformFees.findFirst({
     where: eq(platformFees.dedupKey, dedupKey),
-    columns: { id: true, source: true, status: true },
+    columns: {
+      id: true,
+      source: true,
+      status: true,
+      storeId: true,
+      reservationId: true,
+      billingMonth: true,
+    },
   });
-  const collectedAmountCents = Math.max(
-    0,
-    Math.round(input.collectedAmountCents ?? 0),
-  );
+  // No new row for a store the billing service bills at the time of the fact
+  // (louez-billing docs/api, README §8.3); an existing one is settled while the
+  // monthly run bills its month.
+  if (!existing && !(await legacyBillingAppliesAt(db, input.storeId, at))) {
+    return { recorded: false, reason: "not_legacy_billed" };
+  }
+  const collectedAmountCents = Math.max(0, Math.round(input.collectedAmountCents ?? 0));
   const initialDecision = decideMarketplaceFeeRecord({
     existing: existing ?? null,
     hasLifetimeWaiver: false,
@@ -438,31 +576,33 @@ export async function recordMarketplaceFee(input: {
     collectedAmountCents,
   });
 
-  if (initialDecision.action === 'skip') {
+  if (initialDecision.action === "skip") {
     return { recorded: false, reason: initialDecision.reason };
   }
-  if (initialDecision.action === 'upgrade' && existing) {
-    await db
-      .update(platformFees)
-      .set({
-        source: 'marketplace_online',
-        status: 'collected',
-        amountCents: MARKETPLACE_FEE_CENTS,
-        paymentId: input.paymentId ?? null,
-        stripePaymentIntentId: input.stripePaymentIntentId ?? null,
-        stripeApplicationFeeId: input.stripeApplicationFeeId ?? null,
-        updatedAt: new Date(),
-      })
-      .where(eq(platformFees.id, existing.id));
-    return { recorded: true, reason: 'upgraded_to_collected' };
+  if (initialDecision.action === "upgrade" && existing) {
+    const upgraded = await db.transaction(async (tx) => {
+      if ((await rowsBilledByTheMonthlyRun(tx, [existing])).length === 0) return false;
+      await tx
+        .update(platformFees)
+        .set({
+          source: "marketplace_online",
+          status: "collected",
+          amountCents: MARKETPLACE_FEE_CENTS,
+          paymentId: input.paymentId ?? null,
+          stripePaymentIntentId: input.stripePaymentIntentId ?? null,
+          stripeApplicationFeeId: input.stripeApplicationFeeId ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(platformFees.id, existing.id));
+      await markFeeRows(tx, [existing]);
+      return true;
+    });
+    return upgraded
+      ? { recorded: true, reason: "upgraded_to_collected" }
+      : { recorded: false, reason: "not_legacy_billed" };
   }
 
-  const at = input.at ?? new Date();
-  const currency = (
-    input.currency ||
-    (await getStoreCurrency(input.storeId)) ||
-    'eur'
-  )
+  const currency = (input.currency || (await getStoreCurrency(input.storeId)) || "eur")
     .toLowerCase()
     .slice(0, 3);
 
@@ -479,8 +619,9 @@ export async function recordMarketplaceFee(input: {
         source: input.source,
         collectedAmountCents,
       });
-      if (decision.action !== 'insert') return;
+      if (decision.action !== "insert") return;
       reason = decision.reason;
+      const billingMonth = billingMonthOf(at);
       await tx.insert(platformFees).values({
         id: nanoid(),
         storeId: input.storeId,
@@ -491,16 +632,19 @@ export async function recordMarketplaceFee(input: {
         currency,
         source: decision.source,
         status: decision.status,
-        billingMonth: billingMonthOf(at),
+        billingMonth,
         monthlyIndex: null,
         stripePaymentIntentId: input.stripePaymentIntentId ?? null,
         stripeApplicationFeeId: input.stripeApplicationFeeId ?? null,
       });
+      await markFeeRows(tx, [
+        { storeId: input.storeId, reservationId: input.reservationId, billingMonth },
+      ]);
     });
     return { recorded: true, reason };
   } catch (error) {
-    if (isDuplicateError(error)) {
-      return { recorded: false, reason: 'already_recorded' };
+    if (isDuplicateKeyError(error)) {
+      return { recorded: false, reason: "already_recorded" };
     }
     throw error;
   }
@@ -512,7 +656,9 @@ export async function recordMarketplaceFee(input: {
  * for this reservation (a balance payment must not re-charge it), and waived to 0 while
  * the store still has free-reservation credits. Capped below the charge amount.
  * (With Stripe Standard accounts the connected account bears Stripe's processing fees,
- * so there is no separate platform payment fee.)
+ * so there is no separate platform payment fee.) No fee at all, reeent's included, when
+ * platform billing is off, or for a store the billing service bills when the Stripe
+ * session is created (`reference`, louez-billing docs/api, README §8.3).
  */
 export async function planStripeFees(opts: {
   storeId: string;
@@ -522,6 +668,11 @@ export async function planStripeFees(opts: {
   reference?: Date;
   includeMarketplaceFee?: boolean;
 }): Promise<StripeFeePlan> {
+  const noFee = { applicationFeeCents: 0, reservationFeeCents: 0, marketplaceFeeCents: 0 };
+  if (!isBillingEnabled()) return noFee;
+  if (!(await legacyBillingAppliesAt(db, opts.storeId, opts.reference ?? new Date()))) {
+    return noFee;
+  }
   const billing = opts.billing ?? (await getStoreBilling(opts.storeId));
   const maxFee = Math.max(0, opts.chargeCents - 1);
 
@@ -537,10 +688,7 @@ export async function planStripeFees(opts: {
   }
 
   let reservationFeeCents = 0;
-  if (
-    billing.billingMode === 'pay_as_you_go' &&
-    billing.freeReservationsRemaining <= 0
-  ) {
+  if (billing.billingMode === "pay_as_you_go" && billing.freeReservationsRemaining <= 0) {
     const alreadyRecorded = await hasReservationFee(opts.reservationId);
     if (!alreadyRecorded) {
       reservationFeeCents = await projectedNextReservationFeeCents(
@@ -563,170 +711,487 @@ export async function planStripeFees(opts: {
   };
 }
 
-/**
- * PaymentIntent metadata carrying the reservation commission from checkout to webhook,
- * so the webhook records the exact amount applied (no recompute drift).
- */
-export const FEE_METADATA_KEYS = {
-  /** Present (='2') exactly when this PaymentIntent carries our fee breakdown. */
-  version: 'platformFeeVersion',
-  reservationFee: 'platformReservationFeeCents',
-  marketplaceFee: 'platformMarketplaceFeeCents',
-} as const;
+// ============================================================================
+// The fee at source (louez-billing docs/api, fees.md §5 and §8)
+// ============================================================================
 
-/** Current fee-breakdown metadata version (lets the webhook detect legacy/absent ones). */
-export const FEE_METADATA_VERSION = '3';
+export interface ApplicationFeeInput {
+  storeId: string;
+  reservationId: string;
+  kind: FeeMetadataV4Input["paymentKind"];
+  /** The Stripe charge, in minor units. */
+  chargeMinor: number;
+  currency: string;
+  /** fees.md §4, read when the session is created; 0 when it could not be computed. */
+  insuranceShareMinor: number;
+  /** Today's planner takes the marketplace fee in customer sessions only (fees.md §5). */
+  includeMarketplaceFee?: boolean;
+}
+
+/** The facts of fees.md §8, "Inputs", that Louez reads from its own tables. */
+export type FeeAtSourceFacts = Pick<
+  FeeCharge,
+  | "isMarketplace"
+  | "marketplaceWaived"
+  | "marketplaceAlreadyTaken"
+  | "reservationAlreadyBillable"
+  | "reservationFeeAlreadyTaken"
+>;
+
+export type ApplicationFeeOptions = {
+  /** The alerts of a payment that fails closed. By default Discord is posted after the answer (`after`). */
+  readonly alerts?: BillingAlerts;
+};
+
+/** The application fee of a Stripe charge, and what fee metadata v4 says of it. */
+export interface ApplicationFeePlan extends StripeFeePlan {
+  /** fees.md §8's percent base; 0 when no percent applies, and from the legacy planner. */
+  baseMinor: number;
+  /** The policy the fee came from: `legacy` when the legacy planner computed it. */
+  policyScope: PolicyScope;
+  /** Its version: 0 for `fail_closed` and `legacy`. */
+  policyVersion: number;
+}
+
+interface FeeShadow {
+  policySource: PolicySource;
+  policyVersion: number | null;
+  /** The policy's own `invoicing`; the shadow reads `louez_legacy` as `service`. */
+  invoicing: PolicyInvoicing;
+  /** Null for a store with no policy (`legacy`): there is nothing to evaluate. */
+  facts: FeeAtSourceFacts | null;
+  fee: FeeAtSource | null;
+}
+
+const NO_STRIPE_FEE: StripeFeePlan = {
+  applicationFeeCents: 0,
+  reservationFeeCents: 0,
+  marketplaceFeeCents: 0,
+};
+
+const NO_FEE_AT_SOURCE: FeeAtSource = {
+  totalMinor: 0,
+  reservationMinor: 0,
+  marketplaceMinor: 0,
+  baseMinor: 0,
+};
+
+/** The stores whose payments this process alerted on for failing closed, once each. */
+const alertedFailClosedStores = new Set<string>();
+
+const legacyPlan = (plan: StripeFeePlan): ApplicationFeePlan => ({
+  ...plan,
+  baseMinor: 0,
+  policyScope: "legacy",
+  policyVersion: 0,
+});
 
 /**
- * Serialize a fee plan into PaymentIntent metadata. The version marker is set whenever an
- * application fee is applied, so the webhook can tell "breakdown present" (even with a 0
- * reservation fee) apart from "legacy/missing metadata" instead of inferring from values.
+ * The application fee of a Stripe charge Louez is about to create, from the store's
+ * policy when the session is created (fees.md §8, "Which policy"):
+ * - a `store` or `default` version that says `service` or `none`, or `fail_closed`:
+ *   fees.md §8 on that policy, which takes nothing unless the service invoices the
+ *   store, and nothing when it fails closed, which logs at warn and alerts once per
+ *   store and process. `reservations.allowed` plays no part: the card gate decides
+ *   which reservations exist, not what their payments pay;
+ * - `legacy`, or a version that says `louez_legacy`: what the legacy planner returns,
+ *   nothing for a custom payment request, as before. In service mode it also runs
+ *   fees.md §8 on the cached policy as if the service invoiced the store, and logs
+ *   both. Expect constant differences (fees.md §5): the lines help debug the service's
+ *   prices and count nothing, and the shadow's failure never fails the payment;
+ * - LOUEZ_BILLING off, a self-hosted instance: nothing.
  */
-export function buildFeeMetadata(plan: StripeFeePlan): Record<string, string> {
-  const metadata: Record<string, string> = {};
-  if (plan.applicationFeeCents > 0) {
-    metadata[FEE_METADATA_KEYS.version] = FEE_METADATA_VERSION;
+export async function planApplicationFee(
+  input: ApplicationFeeInput,
+  options: ApplicationFeeOptions = {},
+): Promise<ApplicationFeePlan> {
+  const at = new Date();
+  const effective = await getEffectivePolicy(input.storeId, at);
+  if (effective.source === "built_in") return legacyPlan(NO_STRIPE_FEE);
+  if (effective.source !== "legacy" && effective.terms.invoicing !== "louez_legacy") {
+    return planPolicyFee(input, effective, options);
   }
-  if (plan.reservationFeeCents > 0) {
-    metadata[FEE_METADATA_KEYS.reservationFee] = String(
-      plan.reservationFeeCents,
-    );
+
+  const charged =
+    input.kind === "custom_request"
+      ? Promise.resolve(NO_STRIPE_FEE)
+      : planStripeFees({
+          storeId: input.storeId,
+          reservationId: input.reservationId,
+          chargeCents: input.chargeMinor,
+          reference: at,
+          includeMarketplaceFee: input.includeMarketplaceFee,
+        });
+  if (!isBillingSyncEnabled()) return legacyPlan(await charged);
+
+  const [plan, shadow] = await Promise.all([
+    charged,
+    shadowApplicationFee(input, effective).catch((error: unknown) => {
+      log.warn({
+        billing: {
+          event: "fee_shadow_failed",
+          storeId: input.storeId,
+          reservationId: input.reservationId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+      return null;
+    }),
+  ]);
+  if (shadow) {
+    log.info({
+      billing: {
+        event: "fee_shadow",
+        storeId: input.storeId,
+        reservationId: input.reservationId,
+        kind: input.kind,
+        chargeMinor: input.chargeMinor,
+        currency: input.currency,
+        insuranceShareMinor: input.insuranceShareMinor,
+        policy: {
+          source: shadow.policySource,
+          version: shadow.policyVersion,
+          invoicing: shadow.invoicing,
+        },
+        facts: shadow.facts,
+        charged: {
+          totalMinor: plan.applicationFeeCents,
+          reservationMinor: plan.reservationFeeCents,
+          marketplaceMinor: plan.marketplaceFeeCents,
+        },
+        shadow: shadow.fee,
+        ...compareFeeShadow(plan, shadow.fee),
+      },
+    });
   }
-  if (plan.marketplaceFeeCents > 0) {
-    metadata[FEE_METADATA_KEYS.marketplaceFee] = String(
-      plan.marketplaceFeeCents,
-    );
-  }
-  return metadata;
+  return legacyPlan(plan);
 }
 
 /**
- * Read the reservation commission back from PaymentIntent metadata. `hasBreakdown` is
- * true only when the version marker is present — a PaymentIntent created before this
- * format (or with stripped metadata) returns false so the webhook can fall back safely.
+ * fees.md §8 on the policy in force, for a store the legacy planner does not charge.
+ * Logs the fee and the facts it read, one line per payment. A new store with no
+ * version in force, its own or `*`, fails closed and takes no fee (README §8.3): its
+ * line is a warning, and the first such payment of the store in this process alerts.
  */
-export function parseFeeMetadata(
-  metadata: Record<string, string> | null | undefined,
-): {
+async function planPolicyFee(
+  input: ApplicationFeeInput,
+  effective: EffectivePolicy,
+  options: ApplicationFeeOptions,
+): Promise<ApplicationFeePlan> {
+  const { source, terms } = effective;
+  const facts =
+    terms.invoicing === "service"
+      ? await readFeeAtSourceFacts(input.storeId, input.reservationId)
+      : null;
+  const fee = facts
+    ? feeAtSource(terms, {
+        chargeMinor: input.chargeMinor,
+        currency: input.currency,
+        kind: input.kind,
+        insuranceShareMinor: input.insuranceShareMinor,
+        ...facts,
+      })
+    : NO_FEE_AT_SOURCE;
+  const policyScope = source === "store" || source === "default" ? source : "fail_closed";
+  const failedClosed = policyScope === "fail_closed";
+  const policyVersion = failedClosed ? 0 : (effective.version ?? 0);
+  const line = {
+    billing: {
+      event: "fee_at_source",
+      storeId: input.storeId,
+      reservationId: input.reservationId,
+      kind: input.kind,
+      chargeMinor: input.chargeMinor,
+      currency: input.currency,
+      insuranceShareMinor: input.insuranceShareMinor,
+      policy: { source: policyScope, version: policyVersion, invoicing: terms.invoicing },
+      facts,
+      fee,
+    },
+  };
+  if (failedClosed) {
+    log.warn(line);
+    if (!alertedFailClosedStores.has(input.storeId)) {
+      alertedFailClosedStores.add(input.storeId);
+      const alerts = options.alerts ?? createBillingAlerts({ schedule: after });
+      await alerts.alert(
+        "fee_fail_closed",
+        `store ${input.storeId} is new and Louez holds no policy in force for it, its own or *: its online payments take no fee at source (README §8.3). Check that the service issued * and that Louez cached it.`,
+      );
+    }
+  } else {
+    log.info(line);
+  }
+  return {
+    applicationFeeCents: fee.totalMinor,
+    reservationFeeCents: fee.reservationMinor,
+    marketplaceFeeCents: fee.marketplaceMinor,
+    baseMinor: fee.baseMinor,
+    policyScope,
+    policyVersion,
+  };
+}
+
+/** Whether the shadow fee equals what is charged, part by part. */
+function compareFeeShadow(
+  charged: StripeFeePlan,
+  shadow: FeeAtSource | null,
+): { outcome: "same" | "differs" | "no_policy"; differenceMinor: number | null } {
+  if (!shadow) return { outcome: "no_policy", differenceMinor: null };
+  const same =
+    shadow.totalMinor === charged.applicationFeeCents &&
+    shadow.reservationMinor === charged.reservationFeeCents &&
+    shadow.marketplaceMinor === charged.marketplaceFeeCents;
+  return {
+    outcome: same ? "same" : "differs",
+    differenceMinor: shadow.totalMinor - charged.applicationFeeCents,
+  };
+}
+
+/**
+ * fees.md §8 on the store's policy when the session is created, read as if the service
+ * invoiced the store. In service mode only, for a store the legacy planner charges.
+ */
+async function shadowApplicationFee(
+  input: ApplicationFeeInput,
+  effective: EffectivePolicy,
+): Promise<FeeShadow> {
+  const { source, terms } = effective;
+  if (source === "built_in" || source === "legacy") {
+    return {
+      policySource: "legacy",
+      policyVersion: null,
+      invoicing: terms.invoicing,
+      facts: null,
+      fee: null,
+    };
+  }
+  const facts = await readFeeAtSourceFacts(input.storeId, input.reservationId);
+  const fee = feeAtSource(
+    { ...terms, invoicing: terms.invoicing === "louez_legacy" ? "service" : terms.invoicing },
+    {
+      chargeMinor: input.chargeMinor,
+      currency: input.currency,
+      kind: input.kind,
+      insuranceShareMinor: input.insuranceShareMinor,
+      ...facts,
+    },
+  );
+  return {
+    policySource: source,
+    policyVersion: effective.version,
+    invoicing: terms.invoicing,
+    facts,
+    fee,
+  };
+}
+
+/**
+ * fees.md §8 "Inputs", read before the session is created. Taken fees count from the
+ * reservation's completed and refunded payments, so an unpaid session never counts and a
+ * later refund never resets one, and, until M6, from its legacy rows that are not voided.
+ */
+export async function readFeeAtSourceFacts(
+  storeId: string,
+  reservationId: string,
+): Promise<FeeAtSourceFacts> {
+  const reservation = await db.query.reservations.findFirst({
+    where: and(eq(reservations.id, reservationId), eq(reservations.storeId, storeId)),
+    columns: { source: true, billableAt: true },
+  });
+  if (!reservation) throw new Error(`reservation ${reservationId} is not in store ${storeId}`);
+
+  const reservationKey = reservationFeeKey(reservationId);
+  const marketplaceKey = marketplaceFeeKey(reservationId);
+  const legacyRows = await db
+    .select({ dedupKey: platformFees.dedupKey })
+    .from(platformFees)
+    .where(
+      and(
+        inArray(platformFees.dedupKey, [reservationKey, marketplaceKey]),
+        ne(platformFees.status, "voided"),
+      ),
+    );
+  const takenAtSource = await db
+    .select({
+      origin: payments.origin,
+      reservationMinor: payments.appFeeReservationMinor,
+      marketplaceMinor: payments.appFeeMarketplaceMinor,
+      policyScope: payments.appFeePolicyScope,
+      policyVersion: payments.appFeePolicyVersion,
+    })
+    .from(payments)
+    .where(
+      and(
+        eq(payments.reservationId, reservationId),
+        inArray(payments.status, ["completed", "refunded"]),
+        or(gt(payments.appFeeReservationMinor, 0), gt(payments.appFeeMarketplaceMinor, 0)),
+      ),
+    );
+
+  let reservationFeeAlreadyTaken = legacyRows.some((row) => row.dedupKey === reservationKey);
+  for (const payment of takenAtSource) {
+    if (reservationFeeAlreadyTaken) break;
+    // Extension payments never count (contract Q22).
+    if (payment.origin === "extension" || (payment.reservationMinor ?? 0) <= 0) continue;
+    reservationFeeAlreadyTaken = await tookPerReservationFee(storeId, payment);
+  }
+
+  return {
+    isMarketplace: reservation.source === "marketplace",
+    marketplaceWaived: await hasMarketplaceLifetimeFeeWaiver(storeId),
+    marketplaceAlreadyTaken:
+      legacyRows.some((row) => row.dedupKey === marketplaceKey) ||
+      takenAtSource.some((payment) => (payment.marketplaceMinor ?? 0) > 0),
+    // Read before the session exists, so a time set at all was set before it.
+    reservationAlreadyBillable: reservation.billableAt !== null,
+    reservationFeeAlreadyTaken,
+  };
+}
+
+/**
+ * Whether a payment's reservation part was a `per_reservation` fee, from the policy its
+ * fee metadata names. A legacy fee counts through its `res:` row instead. A policy Louez
+ * no longer holds counts as one, so a reservation never pays that fee twice at source.
+ */
+async function tookPerReservationFee(
+  storeId: string,
+  payment: {
+    readonly policyScope: PolicySource | null;
+    readonly policyVersion: number | null;
+  },
+): Promise<boolean> {
+  const scope = payment.policyScope;
+  if (scope !== "store" && scope !== "default") return false;
+  if (payment.policyVersion === null) return true;
+  const policy = await getCachedPolicy(storeId, scope, payment.policyVersion);
+  return policy === null || policy.applicationFee.kind === "per_reservation";
+}
+
+export type FeeMetadataPayment = Pick<
+  FeeMetadataV4Input,
+  "insuranceShareMinor" | "paymentKind" | "reservationId" | "storeId"
+>;
+
+/**
+ * Fee metadata v4 (louez-billing fees.md §8) of a planned fee, for the session and its
+ * PaymentIntent: written in cloud mode on every session of a payment that can carry a
+ * fee, fee or no fee, with the policy the fee came from; empty when platform billing
+ * is off. The payment's `app_fee_*` columns copy it, and the webhook records a legacy
+ * fee's rows from it.
+ */
+export function buildFeeMetadata(
+  plan: ApplicationFeePlan,
+  payment: FeeMetadataPayment,
+): Record<string, string> {
+  if (!isBillingEnabled()) return {};
+  return buildFeeMetadataV4({
+    totalMinor: plan.applicationFeeCents,
+    reservationMinor: plan.reservationFeeCents,
+    marketplaceMinor: plan.marketplaceFeeCents,
+    baseMinor: plan.baseMinor,
+    policyScope: plan.policyScope,
+    policyVersion: plan.policyVersion,
+    ...payment,
+  });
+}
+
+/**
+ * Read the legacy fee parts back from PaymentIntent metadata, v4 or the v3 keys of
+ * sessions created before it. A fee set by a `store`, `default` or `fail_closed` policy
+ * is the service's, not a legacy one: its parts read as 0, so the webhook never settles
+ * a pending legacy row with it. `hasBreakdown` is false when neither is there (an older
+ * session, or stripped metadata), so the webhook can fall back safely.
+ */
+export function parseFeeMetadata(metadata: Record<string, string> | null | undefined): {
   reservationFeeCents: number;
   marketplaceFeeCents: number;
   hasBreakdown: boolean;
 } {
-  const value = Number(metadata?.[FEE_METADATA_KEYS.reservationFee]);
-  const marketplaceValue = Number(metadata?.[FEE_METADATA_KEYS.marketplaceFee]);
+  const facts = readFeeMetadata(metadata);
+  const legacy = facts?.policyScope === "legacy" ? facts : null;
   return {
-    reservationFeeCents:
-      Number.isFinite(value) && value > 0 ? Math.round(value) : 0,
-    marketplaceFeeCents:
-      Number.isFinite(marketplaceValue) && marketplaceValue > 0
-        ? Math.round(marketplaceValue)
-        : 0,
-    hasBreakdown:
-      metadata?.[FEE_METADATA_KEYS.version] === FEE_METADATA_VERSION,
+    reservationFeeCents: Math.max(0, legacy?.reservationMinor ?? 0),
+    marketplaceFeeCents: Math.max(0, legacy?.marketplaceMinor ?? 0),
+    hasBreakdown: facts !== null,
   };
 }
 
 // ============================================================================
-// Refund reversal (covers the reservation fee collected on a payment)
+// Application fee refunds (the fee taken at source on a payment)
 // ============================================================================
 
-export interface ReversibleFee {
-  id: string;
-  amountCents: number;
-  amountReversedCents: number;
-}
+/** Legacy sources whose fee Stripe took on the charge. The others are billed at month end. */
+const TAKEN_AT_SOURCE = ["online", "marketplace_online"] as const;
 
 /**
- * Fees collected on a payment intent that can still be (partially) reversed — i.e.
- * `collected`/`billed` rows not yet fully reversed. Both fee components share the one
- * Stripe application fee object, refunded (in part or full) once. Read-only.
+ * Records Stripe's refunded amount of an application fee on the legacy rows Stripe
+ * took that fee for (louez-billing docs/api, fees.md §9): the `online` and
+ * `marketplace_online` rows of its charge, matched by the fee id, or by the
+ * PaymentIntent for rows that predate it. A manual row can carry the PaymentIntent
+ * too, when its fee did not fit the charge: Stripe took nothing for it, so a refund
+ * never reverses it, billed or not. Called by the reversal at source after its Stripe
+ * calls, with Drizzle on the connection that holds its lock; the amount is Stripe's,
+ * so a repeat writes nothing. No-op when platform billing is off, and for a row the
+ * monthly run does not bill, as voidReservationFee (louez-billing docs/api, README §8.3).
  */
-export async function getReversibleFees(paymentIntentId: string): Promise<{
-  stripeApplicationFeeId: string | null;
-  rows: ReversibleFee[];
-}> {
-  const rows = await db
-    .select({
-      id: platformFees.id,
-      amountCents: platformFees.amountCents,
-      amountReversedCents: platformFees.amountReversedCents,
-      stripeApplicationFeeId: platformFees.stripeApplicationFeeId,
-    })
-    .from(platformFees)
-    .where(
-      and(
-        eq(platformFees.stripePaymentIntentId, paymentIntentId),
-        inArray(platformFees.status, ['collected', 'billed']),
-      ),
-    );
-
-  const reversible = rows.filter((r) => r.amountReversedCents < r.amountCents);
-  const stripeApplicationFeeId =
-    rows.find((r) => r.stripeApplicationFeeId)?.stripeApplicationFeeId ?? null;
-  return {
-    stripeApplicationFeeId,
-    rows: reversible.map((r) => ({
-      id: r.id,
-      amountCents: r.amountCents,
-      amountReversedCents: r.amountReversedCents,
-    })),
-  };
-}
-
-/**
- * Distribute a total reversal amount across fee rows proportionally (capped at each
- * row's remaining reversible amount). Pure — lets the caller decide the total (full
- * refund, partial ratio, or dispute clawback) then persist via `recordFeeReversals`.
- */
-export function distributeReversal(
-  rows: ReversibleFee[],
-  totalReverseCents: number,
-): Array<{ id: string; amountReversedCents: number; fullyReversed: boolean }> {
-  const updates: Array<{
-    id: string;
-    amountReversedCents: number;
-    fullyReversed: boolean;
-  }> = [];
-  let remaining = Math.max(0, Math.round(totalReverseCents));
-  for (const row of rows) {
-    if (remaining <= 0) break;
-    const capacity = row.amountCents - row.amountReversedCents;
-    if (capacity <= 0) continue;
-    const add = Math.min(capacity, remaining);
-    const newReversed = row.amountReversedCents + add;
-    updates.push({
-      id: row.id,
-      amountReversedCents: newReversed,
-      fullyReversed: newReversed >= row.amountCents,
-    });
-    remaining -= add;
-  }
-  return updates;
-}
-
-/**
- * Persist fee reversals — call only after the Stripe application-fee refund succeeded.
- * Idempotent + defensive: only touches rows still `collected`/`billed`, and marks a row
- * `reversed` once `amountReversedCents` reaches `amountCents`.
- */
-export async function recordFeeReversals(
-  updates: Array<{ id: string; amountReversedCents: number; fullyReversed: boolean }>,
+export async function recordApplicationFeeRefund(
+  input: {
+    readonly applicationFeeId: string;
+    readonly paymentIntentId: string | null;
+    /** Stripe's `fee.amount_refunded`, cumulative. */
+    readonly feeRefundedMinor: number;
+  },
+  executor: Database | DatabaseOnConnection,
 ): Promise<void> {
-  for (const u of updates) {
-    await db
-      .update(platformFees)
-      .set({
-        amountReversedCents: u.amountReversedCents,
-        ...(u.fullyReversed ? { status: 'reversed' as const } : {}),
-        updatedAt: new Date(),
+  if (!isBillingEnabled()) return;
+  const sameCharge = input.paymentIntentId
+    ? or(
+        eq(platformFees.stripeApplicationFeeId, input.applicationFeeId),
+        and(
+          isNull(platformFees.stripeApplicationFeeId),
+          eq(platformFees.stripePaymentIntentId, input.paymentIntentId),
+        ),
+      )
+    : eq(platformFees.stripeApplicationFeeId, input.applicationFeeId);
+  await executor.transaction(async (tx) => {
+    const locked = await tx
+      .select({
+        id: platformFees.id,
+        storeId: platformFees.storeId,
+        reservationId: platformFees.reservationId,
+        billingMonth: platformFees.billingMonth,
+        amountCents: platformFees.amountCents,
+        amountReversedCents: platformFees.amountReversedCents,
+        status: platformFees.status,
       })
+      .from(platformFees)
       .where(
         and(
-          eq(platformFees.id, u.id),
-          inArray(platformFees.status, ['collected', 'billed']),
+          sameCharge,
+          inArray(platformFees.source, [...TAKEN_AT_SOURCE]),
+          inArray(platformFees.status, ["collected", "reversed"]),
         ),
-      );
-  }
+      )
+      .orderBy(asc(platformFees.createdAt), asc(platformFees.id))
+      .for("update");
+    const rows = await rowsBilledByTheMonthlyRun(tx, locked);
+
+    const changed: typeof rows = [];
+    for (const { row, amountReversedCents, fullyReversed } of splitFeeRefund(
+      rows,
+      input.feeRefundedMinor,
+    )) {
+      const status = fullyReversed ? "reversed" : "collected";
+      if (row.amountReversedCents === amountReversedCents && row.status === status) continue;
+      await tx
+        .update(platformFees)
+        .set({ amountReversedCents, status, updatedAt: new Date() })
+        .where(eq(platformFees.id, row.id));
+      changed.push(row);
+    }
+    if (changed.length > 0) await markFeeRows(tx, changed);
+  });
 }
 
 // ============================================================================
@@ -774,18 +1239,16 @@ export async function getCurrentMonthUsage(
   // recorded at, so totals are SUMMED, never recomputed from the current config (a
   // mid-month rate change must not retroactively reprice past rentals). Free rentals have
   // amount 0, so they count as locations but add nothing to gross/due.
-  const active = rows.filter((r) =>
-    (ACTIVE_FEE_STATUSES as readonly string[]).includes(r.status),
-  );
+  const active = rows.filter((r) => (ACTIVE_FEE_STATUSES as readonly string[]).includes(r.status));
   const locationCount = active.length;
   const grossCents = active.reduce((sum, r) => sum + r.amountCents, 0);
   const collectedAtSourceCents = rows
-    .filter((r) => r.status === 'collected')
+    .filter((r) => r.status === "collected")
     .reduce((sum, r) => sum + r.amountCents, 0);
   // What would be invoiced if the month closed now: the manual (pending) fees only;
   // collected fees are already paid at source.
   const dueCents = rows
-    .filter((r) => r.status === 'pending')
+    .filter((r) => r.status === "pending")
     .reduce((sum, r) => sum + r.amountCents, 0);
 
   return {
@@ -807,7 +1270,7 @@ export interface PayAsYouGoInvoiceSummary {
   collectedAtSourceCents: number;
   invoicedAmountCents: number;
   currency: string;
-  status: 'open' | 'paid' | 'failed' | 'void';
+  status: "open" | "paid" | "failed" | "void";
   paidAt: Date | null;
 }
 
@@ -828,16 +1291,11 @@ export async function getRecentPayAsYouGoInvoices(
       paidAt: payAsYouGoInvoices.paidAt,
     })
     .from(payAsYouGoInvoices)
-    .where(
-      and(
-        eq(payAsYouGoInvoices.storeId, storeId),
-        ne(payAsYouGoInvoices.status, 'draft'),
-      ),
-    )
+    .where(and(eq(payAsYouGoInvoices.storeId, storeId), ne(payAsYouGoInvoices.status, "draft")))
     .orderBy(desc(payAsYouGoInvoices.billingMonth))
     .limit(limit);
 
-  return rows.filter((r): r is PayAsYouGoInvoiceSummary => r.status !== 'draft');
+  return rows.filter((r): r is PayAsYouGoInvoiceSummary => r.status !== "draft");
 }
 
 /**
@@ -858,7 +1316,7 @@ export async function projectedNextReservationFeeCents(
     .where(
       and(
         eq(platformFees.storeId, storeId),
-        ne(platformFees.source, 'free'),
+        ne(platformFees.source, "free"),
         eq(platformFees.billingMonth, billingMonth),
         eq(platformFees.currency, resolved.config.currency),
         inArray(platformFees.status, [...ACTIVE_FEE_STATUSES]),

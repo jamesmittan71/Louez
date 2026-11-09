@@ -85,6 +85,19 @@ export const CheckoutDeliveryStep = withForm({
       locate();
     }, [geolocationEnabled, locate]);
 
+    // Without a method to pick, nothing else would carry over the address the
+    // customer already gave. It may still be resolving, so keep trying until
+    // the leg holds an address; after that, clearing the field stays cleared.
+    const hasPrefilledForcedAddressRef = useRef(false);
+    useEffect(() => {
+      if (!delivery.isDeliveryForced || hasPrefilledForcedAddressRef.current) return;
+      if (delivery.outboundAddress.address) {
+        hasPrefilledForcedAddressRef.current = true;
+        return;
+      }
+      onUseCustomerAddress("outbound");
+    }, [delivery.isDeliveryForced, delivery.outboundAddress.address, onUseCustomerAddress]);
+
     const storeLabel = storeName ?? t("storeLocationFallback");
 
     const locations = useMemo(
@@ -255,9 +268,18 @@ export const CheckoutDeliveryStep = withForm({
           >
             <h3 className="text-sm font-semibold">{t("outboundTitle")}</h3>
 
+            {delivery.isDeliveryForced ? (
+              <p className="text-sm text-muted-foreground">
+                {delivery.isDeliveryIncluded
+                  ? t("deliveryIncludedDescription")
+                  : t("deliveryRequiredDescription")}
+              </p>
+            ) : null}
+
             <CheckoutFulfillmentLeg
               {...sharedLegProps}
               leg="outbound"
+              showMethodChoice={!delivery.isDeliveryForced}
               method={delivery.outboundMethod}
               onMethodChange={(method) => {
                 delivery.handleOutboundMethodChange(method);
@@ -286,6 +308,7 @@ export const CheckoutDeliveryStep = withForm({
               onScopeChange={handleReturnScopeChange}
               isAddressDeliveryEnabled={delivery.isAddressDeliveryEnabled}
               isAddressDeliveryAvailable={delivery.isDeliveryAmountEligible}
+              isLocationReturnAvailable={!delivery.isDeliveryForced}
               deliveryPrice={deliveryPrice}
               isDeliveryFree={isDeliveryFree}
               isPickupAtAddress={delivery.outboundMethod === "address"}

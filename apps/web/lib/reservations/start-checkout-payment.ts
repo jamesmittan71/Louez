@@ -1,9 +1,10 @@
 import { nanoid } from "nanoid";
 
-import { db, payments, reservationActivity } from "@louez/db";
+import { db, markReservation, payments, reservationActivity } from "@louez/db";
 
+import { toMinorOrThrow } from "@/lib/billing-sync/money";
 import { log } from "@/lib/evlog";
-import { buildFeeMetadata, getStoreBilling, planStripeFees } from "@/lib/pay-as-you-go";
+import { buildFeeMetadata, planApplicationFee } from "@/lib/pay-as-you-go";
 import {
   captureProductServerEvent,
   toAnalyticsAmountCents,
@@ -12,6 +13,7 @@ import { productAnalyticsEvents } from "@/lib/product-analytics/analytics-events
 import { getStorefrontUrl } from "@/lib/storefront-url";
 import { createCheckoutSession, toStripeCents } from "@/lib/stripe";
 import { getStripe } from "@/lib/stripe/client";
+import { paymentInsuranceShareMinor } from "@/lib/stripe/payment-completion";
 
 import { buildStripeLineItems, getCheckoutChargeAmount } from "./build-stripe-line-items";
 import { runAfterResponse } from "./post-creation-effects";
@@ -95,16 +97,22 @@ export const startCheckoutPayment = async ({
       toCents: (amount) => toStripeCents(amount, currency),
     });
 
-    // Skim the platform fee directly from the online payment via a Stripe
-    // application fee: the pay-as-you-go reservation commission. Capped below
-    // the charge amount; the exact amount is recorded on confirmation
-    // (webhook) from metadata.
-    const billing = await getStoreBilling(store.id);
-    const feePlan = await planStripeFees({
+    const chargeCents = toStripeCents(finalChargeAmount, currency);
+    // The reservation was just written from these totals, tax included.
+    const insuranceShareMinor = paymentInsuranceShareMinor("rental", chargeCents, () => ({
+      insuranceMinor: toMinorOrThrow(insuranceAmount.toFixed(2), currency),
+      totalInclTaxMinor: toMinorOrThrow(totals.total.toFixed(2), currency),
+    }));
+    // The platform fee is taken from the online payment as a Stripe application
+    // fee, from the store's billing policy or the legacy planner, capped below the
+    // charge amount. The payment copies it from the metadata when it completes.
+    const feePlan = await planApplicationFee({
       storeId: store.id,
       reservationId: reservation.id,
-      chargeCents: toStripeCents(finalChargeAmount, currency),
-      billing,
+      kind: "rental",
+      chargeMinor: chargeCents,
+      currency,
+      insuranceShareMinor: insuranceShareMinor ?? 0,
     });
 
     // Both landings carry the reservation id: the return route completes the
@@ -124,7 +132,12 @@ export const startCheckoutPayment = async ({
       cancelUrl: `${baseUrl}${cancelPath}?reservation=${reservation.id}`,
       locale,
       applicationFeeAmount: feePlan.applicationFeeCents,
-      feeMetadata: buildFeeMetadata(feePlan),
+      feeMetadata: buildFeeMetadata(feePlan, {
+        insuranceShareMinor: insuranceShareMinor ?? 0,
+        paymentKind: "rental",
+        reservationId: reservation.id,
+        storeId: store.id,
+      }),
       checkoutFlow: "storefront_checkout",
     });
     createdSessionId = sessionId;
@@ -139,11 +152,13 @@ export const startCheckoutPayment = async ({
         method: "stripe",
         status: "pending",
         stripeCheckoutSessionId: sessionId,
+        origin: "checkout",
         currency,
         notes: isPartialPayment ? `Acompte ${depositPercentage}%` : null,
         createdAt: now,
         updatedAt: now,
       });
+      await markReservation(tx, { id: reservation.id, storeId: store.id });
 
       await tx.insert(reservationActivity).values({
         id: nanoid(),

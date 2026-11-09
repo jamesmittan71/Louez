@@ -6,6 +6,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Building2, ExternalLink, MapPin, Pencil, Store, Truck, Shield, User } from "lucide-react";
 
+import type { ReservationItemDetailsView } from "@louez/api/services/customer-fields-online";
+import { DEFAULT_CONTRACT_SIGNATURE_MODE, type ContractSignatureMode } from "@louez/types";
 import { Button } from "@louez/ui";
 import { Card, CardContent, CardHeader, CardTitle } from "@louez/ui";
 import {
@@ -25,6 +27,7 @@ import { AdvisorConversationCard } from "./advisor-conversation-card";
 import { EmailContactPopover } from "@/components/dashboard/email-contact-popover";
 import { PhoneContactPopover } from "@/components/dashboard/phone-contact-popover";
 import { ReservationItemsCard } from "./reservation-items-card";
+import { ReservationItemDetailsCard } from "./reservation-item-details-card";
 import { ReservationHeader } from "./reservation-header";
 import { ReservationBillingDialog } from "./reservation-billing-dialog";
 import { ReservationCustomerNotes, ReservationNotes } from "./reservation-notes";
@@ -85,12 +88,15 @@ interface ReservationDetailClientProps {
   smsConfigured: boolean;
   stripeConfigured: boolean;
   inspectionSettings: InspectionSettingsLike;
+  contractSignatureMode?: ContractSignatureMode;
   showStoreLocations: boolean;
   departureInspection: InspectionData | null;
   returnInspection: InspectionData | null;
   defaultPaymentMethod?: PaymentMethod;
   invoices: ReservationInvoiceDocument[];
   canGenerateInvoice: boolean;
+  /** "Détails de la location", read with the page. */
+  initialItemDetails?: ReservationItemDetailsView[];
   readOnly?: boolean;
   onBack?: () => void;
   onPreviewEmail?: () => void;
@@ -127,12 +133,14 @@ export function ReservationDetailClient({
   smsConfigured: _smsConfigured,
   stripeConfigured,
   inspectionSettings,
+  contractSignatureMode = DEFAULT_CONTRACT_SIGNATURE_MODE,
   showStoreLocations,
   departureInspection,
   returnInspection,
   defaultPaymentMethod,
   invoices,
   canGenerateInvoice,
+  initialItemDetails,
   readOnly = false,
   onBack,
   onPreviewEmail,
@@ -278,6 +286,10 @@ export function ReservationDetailClient({
         depositCollected={depositCollected}
         depositReturned={depositReturned}
         totalAmount={parseFloat(reservation.totalAmount)}
+        contractSignature={{
+          signedAt: reservation.signedAt,
+          signatureMethod: reservation.signatureMethod,
+        }}
         currency={currency}
         sentEmails={reservation.sentEmails || []}
       />
@@ -422,6 +434,14 @@ export function ReservationDetailClient({
             }
           />
 
+          {/* Landing demos render this page without a session to read the details with. */}
+          {!readOnly && (
+            <ReservationItemDetailsCard
+              reservationId={reservation.id}
+              initialItems={initialItemDetails}
+            />
+          )}
+
           <div data-reservation-history>
             <ActivityTimelineV2
               activities={reservation.activity}
@@ -485,6 +505,9 @@ export function ReservationDetailClient({
             inspectionMode={inspectionSettings.mode}
             hasDepartureInspection={!!departureInspection}
             hasReturnInspection={!!returnInspection}
+            contractSigned={!!reservation.signedAt}
+            contractSignatureMode={contractSignatureMode}
+            customerName={`${reservation.customer.firstName} ${reservation.customer.lastName}`.trim()}
             onRecordPayment={() => setPaymentModalOpen(true)}
           />
 

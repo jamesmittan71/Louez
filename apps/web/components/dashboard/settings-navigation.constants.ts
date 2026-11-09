@@ -8,6 +8,7 @@ import {
   ClipboardIcon,
   ClockIcon,
   CodeIcon,
+  CreditCardIcon,
   DownloadIcon,
   FileCheckIcon,
   FileTextIcon,
@@ -26,6 +27,7 @@ import {
   TagIcon,
   TerminalIcon,
   TruckIcon,
+  UsersIcon,
 } from "@louez/ui/icons";
 
 export type SettingsNavigationGroupId = "store" | "rental" | "communication" | "accountData";
@@ -39,6 +41,18 @@ export type SettingsNavigationItem = {
   labelPath: string;
   navigation: boolean;
   platformAdminOnly?: boolean;
+  /** Hidden unless the instance bills its stores (LOUEZ_BILLING=cloud). */
+  requiresBilling?: boolean;
+  /**
+   * Hidden unless Louez's own billing bills this store now (lib/billing/policy.ts,
+   * legacyBillingApplies), which a store the billing service bills never gets.
+   */
+  requiresLegacyBilling?: boolean;
+  /**
+   * Hidden unless the viewer may see the billing pages of this store
+   * (lib/billing/billing-access.ts), which need the service.
+   */
+  requiresBillingPages?: boolean;
   /** Hidden unless the store's electronic-invoicing rollout flag is on. */
   requiresElectronicInvoicing?: boolean;
   searchPaths: string[];
@@ -197,6 +211,16 @@ export const SETTINGS_NAVIGATION_ITEMS: SettingsNavigationItem[] = [
     navigation: true,
   },
   {
+    id: "customer-fields",
+    href: "/dashboard/settings/customer-fields",
+    icon: UsersIcon,
+    labelPath: "dashboard.settings.customerFields.title",
+    descriptionPath: "dashboard.settings.customerFields.description",
+    searchPaths: ["dashboard.settings.customerFields"],
+    group: "rental",
+    navigation: true,
+  },
+  {
     id: "promo-codes",
     href: "/dashboard/settings/promo-codes",
     icon: TagIcon,
@@ -245,6 +269,8 @@ export const SETTINGS_NAVIGATION_ITEMS: SettingsNavigationItem[] = [
     searchPaths: ["dashboard.referrals"],
     group: "communication",
     navigation: true,
+    // The rewards are credits on Louez's own billing (maybeGrantReferrerReward).
+    requiresLegacyBilling: true,
   },
   {
     id: "widget",
@@ -324,6 +350,20 @@ export const SETTINGS_NAVIGATION_ITEMS: SettingsNavigationItem[] = [
     searchPaths: ["dashboard.settings.subscription", "dashboard.settings.subscriptionSettings"],
     group: "accountData",
     navigation: true,
+    requiresBilling: true,
+  },
+  // "Facturation": the offer, the card, the billing details and the statements, from
+  // the billing service (design §6.1).
+  {
+    id: "billing",
+    href: "/dashboard/settings/billing",
+    icon: CreditCardIcon,
+    labelPath: "dashboard.settings.billing.label",
+    descriptionPath: "dashboard.settings.billing.description",
+    searchPaths: ["dashboard.settings.billing"],
+    group: "accountData",
+    navigation: true,
+    requiresBillingPages: true,
   },
   {
     id: "export",
@@ -344,6 +384,30 @@ export const SETTINGS_NAVIGATION_ITEMS: SettingsNavigationItem[] = [
     searchPaths: ["dashboard.settings.admin"],
     group: "accountData",
     navigation: true,
+    requiresBilling: true,
     platformAdminOnly: true,
   },
 ];
+
+/** The items this viewer may see on this instance. */
+export const filterSettingsNavigationItems = ({
+  billingEnabled,
+  legacyBillingEnabled,
+  billingPagesEnabled,
+  electronicInvoicingEnabled,
+  isPlatformAdmin,
+}: {
+  billingEnabled: boolean;
+  legacyBillingEnabled: boolean;
+  billingPagesEnabled: boolean;
+  electronicInvoicingEnabled: boolean;
+  isPlatformAdmin: boolean;
+}): SettingsNavigationItem[] =>
+  SETTINGS_NAVIGATION_ITEMS.filter(
+    (item) =>
+      (!item.platformAdminOnly || isPlatformAdmin) &&
+      (!item.requiresBilling || billingEnabled) &&
+      (!item.requiresLegacyBilling || legacyBillingEnabled) &&
+      (!item.requiresBillingPages || billingPagesEnabled) &&
+      (!item.requiresElectronicInvoicing || electronicInvoicingEnabled),
+  );

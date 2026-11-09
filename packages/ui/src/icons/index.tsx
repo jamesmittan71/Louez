@@ -111,7 +111,13 @@ export {
 } from "@mynaui/icons-react";
 
 export {
+  AudioLines as AudioLinesIcon,
+  Pause as PauseIcon,
+  Play as PlayIcon,
+  RotateCcw as RotateCcwIcon,
+  Voicemail as VoicemailIcon,
   BarChart3 as AnalyticsIcon,
+  Fingerprint as FingerprintIcon,
   Bot as BotIcon,
   CalendarDays as CalendarDaysIcon,
   Calendar as CalendarIcon,

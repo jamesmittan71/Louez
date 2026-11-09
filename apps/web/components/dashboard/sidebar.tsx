@@ -39,8 +39,10 @@ import { HelpGlassIcon } from "@louez/ui/icons/glass";
 
 // import { ReferralSidebarWidget } from '@/components/dashboard/referral-sidebar-widget';
 import { UserAvatar } from "@/components/dashboard/shared/user-avatar";
+import { useInstanceConfig } from "@/components/instance-provider";
 import { InstallPrompt } from "@/components/dashboard/install-prompt";
 import { PushPrimer } from "@/components/dashboard/push-primer";
+import { ReservationsPausedSidebarItem } from "@/components/dashboard/reservations-paused-sidebar-item";
 import { SidebarLink } from "@/components/dashboard/sidebar-link";
 import { StoreSwitcher } from "@/components/dashboard/store-switcher";
 import { ThemeMenuSub } from "@/components/dashboard/theme-toggle";
@@ -80,6 +82,8 @@ interface DashboardSidebarProps {
   marketplaceListingUrl: string | null;
   /** The store signed up from the reeent consumer marketplace (ADR 010). */
   isFromReeent: boolean;
+  /** The card gate pauses new reservations and the viewer can open the billing page. */
+  reservationsPaused: boolean;
 }
 
 /**
@@ -201,6 +205,8 @@ const UserMenu = ({
 }) => {
   const t = useTranslations("dashboard.settings.accountSettings");
   const tAuth = useTranslations("auth");
+  // The platform admin area is billing only (app/admin): absent when billing is off.
+  const { billingEnabled } = useInstanceConfig();
 
   return (
     <DropdownMenu>
@@ -223,7 +229,7 @@ const UserMenu = ({
         <DropdownMenuItem render={<SidebarLink href="/dashboard/account" />}>
           {t("title")}
         </DropdownMenuItem>
-        {isPlatformAdmin && (
+        {isPlatformAdmin && billingEnabled && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem render={<SidebarLink href="/admin" />}>
@@ -279,6 +285,7 @@ export const DashboardSidebar = ({
   aiCredits = null,
   marketplaceListingUrl,
   isFromReeent,
+  reservationsPaused,
 }: DashboardSidebarProps) => {
   const pathname = usePathname();
   const balanceQuery = useQuery({
@@ -314,6 +321,7 @@ export const DashboardSidebar = ({
                 they only differ by the attention dot they carry. */}
             <InstallPrompt />
             <PushPrimer />
+            {reservationsPaused && <ReservationsPausedSidebarItem />}
             <WhatsNewSidebarItem />
             <HelpButton />
           </SidebarMenu>

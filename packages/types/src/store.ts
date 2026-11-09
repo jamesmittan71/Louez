@@ -1,3 +1,4 @@
+import type { CustomerFormLayout, CustomerProfileSettings } from "./customer";
 import type { AppliedProductPromotion } from "./product-promotion";
 export interface TimeRange {
   openTime: string; // "HH:mm" e.g. "09:00"
@@ -186,6 +187,22 @@ export const DEFAULT_INSPECTION_SETTINGS: InspectionSettings = {
 };
 
 // ============================================================================
+// Contract signature
+// ============================================================================
+
+/**
+ * What marking a reservation picked up does while the customer has not signed the contract:
+ * - 'optional': nothing, the badge on the reservation is enough
+ * - 'recommended': a warning, staff can have it signed in store or hand over anyway
+ * - 'required': refused until the contract is signed
+ */
+export type ContractSignatureMode = "optional" | "recommended" | "required";
+
+export const CONTRACT_SIGNATURE_MODES = ["optional", "recommended", "required"] as const;
+
+export const DEFAULT_CONTRACT_SIGNATURE_MODE: ContractSignatureMode = "recommended";
+
+// ============================================================================
 // Integrations Settings
 // ============================================================================
 
@@ -320,6 +337,8 @@ export interface StoreSettings {
   billingAddress?: BillingAddress; // Separate billing address for contracts
   delivery?: DeliverySettings; // Delivery configuration
   inspection?: InspectionSettings; // Inventory inspection (etat des lieux)
+  /** Whether the contract must be signed before pickup. Absent: 'recommended'. */
+  contractSignatureMode?: ContractSignatureMode;
   integrationData?: IntegrationData;
   /** Storefront contact page: channels offered and form forwarding. */
   contact?: StoreContactSettings;
@@ -327,6 +346,10 @@ export interface StoreSettings {
   social?: StoreSocialLinks;
   /** Free text at the bottom of the storefront footer (SIRET, accreditation, affiliation). */
   footerNote?: string | null;
+  /** Visibility of the optional native blocks of the customer record. */
+  customerProfile?: CustomerProfileSettings;
+  /** Order and width of the Louez fields in the customer form layout. */
+  customerFormLayout?: CustomerFormLayout;
 }
 
 // ============================================================================
@@ -556,6 +579,15 @@ export interface PricingBreakdown {
 export type BillingMode = "subscription" | "pay_as_you_go";
 
 /**
+ * The pricing model a store is billed under (`subscriptions.pricing_version`). The model
+ * says how the commission is computed; the numbers are frozen on the store's own row
+ * (`PayAsYouGoConfig`), so changing the offer for new stores never reprices a store.
+ * - `payg-ladder-v1`: a fee per rental, from a graduated ladder or a flat rate.
+ * - `payg-custom`: the same per-rental model, with numbers a platform admin set for this store.
+ */
+export type PricingVersion = "payg-ladder-v1" | "payg-custom";
+
+/**
  * A single graduated pricing band. `upToCount` is the inclusive upper bound of the
  * monthly rental index this band covers; `null` means "and above" (the last band).
  * Bands are evaluated in order; the first band whose `upToCount` is >= the rental's
@@ -571,7 +603,8 @@ export interface PayAsYouGoTier {
 
 /**
  * Per-store pay-as-you-go pricing configuration. Stored as JSON on the store's
- * subscription row. When fields are omitted, the platform default ladder applies.
+ * subscription row, frozen when the store is created. Omitted tiers resolve to the
+ * built-in ladder (1€ / 0,80€ / 0,50€).
  */
 export interface PayAsYouGoConfig {
   /**
@@ -580,7 +613,7 @@ export interface PayAsYouGoConfig {
    * `null`/omitted = use the tier ladder.
    */
   flatRateCents?: number | null;
-  /** Graduated tier ladder. When omitted, the platform default ladder applies. */
+  /** Graduated tier ladder. When omitted, the built-in ladder applies. */
   tiers?: PayAsYouGoTier[];
   /** ISO 4217 currency for the commission (lowercase, e.g. 'eur'). Default: 'eur'. */
   currency?: string;

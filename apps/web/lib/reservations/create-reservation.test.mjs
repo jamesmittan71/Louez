@@ -5,6 +5,10 @@ import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 const { validateStripePaymentAmount } = createRequire(import.meta.url)("@louez/utils");
 const { getCheckoutChargeAmount } = createRequire(import.meta.url)("./build-stripe-line-items.ts");
+const { STORE_NOT_ACCEPTING_RESERVATIONS_ERROR } = createRequire(import.meta.url)("@louez/types");
+const { renterGateRefusalParams } = createRequire(import.meta.url)(
+  "../billing/reservation-gate-error.ts",
+);
 
 const source = readFileSync(new URL("./create-reservation.ts", import.meta.url), "utf8");
 const compiled = stripTypeScriptTypes(
@@ -27,6 +31,8 @@ for (const mode of ["request", "payment", "payment-unavailable"]) {
     const create = runInNewContext(`${compiled}; createReservation`, {
       checkMarketplaceCapability: async () => null,
       prepareReservation: async () => ({ ok: true, prepared }),
+      checkReservationGate: async () => ({ accepts: true }),
+      STORE_NOT_ACCEPTING_RESERVATIONS_ERROR,
       writeReservation: async () => ({
         ok: true,
         replay: false,
@@ -40,6 +46,7 @@ for (const mode of ["request", "payment", "payment-unavailable"]) {
       getCheckoutChargeAmount,
       validateStripePaymentAmount,
       cancelFailedCheckoutReservation: async () => true,
+      runReservationEffects: async () => {},
       runPostCreationEffects: async () => {},
       notifyRequestReceived: async () => {},
       startCheckoutPayment: async () =>
@@ -78,14 +85,19 @@ const checkoutFixture = ({
   source = "online",
   mode = "payment",
   paymentUrl = "https://stripe.example.test/pay",
+  gate = { accepts: true },
+  contact = { phone: "+33 6 12 34 56 78", email: "shop@example.test" },
 } = {}) => {
   const writes = [];
   const cancellations = [];
   const notifications = [];
+  const gateChecks = [];
+  const runReservationEffects = async () => {};
   const prepared = {
     store: {
       id: "store",
       slug: "shop",
+      ...contact,
       settings: { currency: "EUR", onlinePaymentDepositPercentage: 100 },
     },
     totals: { total },
@@ -99,6 +111,12 @@ const checkoutFixture = ({
   const create = runInNewContext(`${compiled}; createReservation`, {
     checkMarketplaceCapability: async () => null,
     prepareReservation: async () => ({ ok: true, prepared }),
+    checkReservationGate: async (storeId, surface) => {
+      gateChecks.push({ storeId, surface });
+      return gate;
+    },
+    STORE_NOT_ACCEPTING_RESERVATIONS_ERROR,
+    renterGateRefusalParams,
     getEffectiveReservationMode: () => mode,
     getCheckoutChargeAmount,
     validateStripePaymentAmount,
@@ -118,10 +136,11 @@ const checkoutFixture = ({
       notifications.push(true);
     },
     startCheckoutPayment: async () => paymentUrl,
-    cancelFailedCheckoutReservation: async (input) => {
-      cancellations.push(input);
+    cancelFailedCheckoutReservation: async (input, runner) => {
+      cancellations.push({ input, runner });
       return true;
     },
+    runReservationEffects,
     failReservation: (error, params) => ({ ok: false, error, params }),
     describeError: String,
     log: { error() {} },
@@ -130,6 +149,8 @@ const checkoutFixture = ({
     writes,
     cancellations,
     notifications,
+    gateChecks,
+    runReservationEffects,
     submit: () =>
       create({
         source,
@@ -157,7 +178,9 @@ test("minimum permits checkout; session failure cancels without a request notifi
   const failed = checkoutFixture({ total: 1, paymentUrl: null });
   assert.equal((await failed.submit()).error, "errors.checkoutPaymentFailed");
   assert.equal(failed.cancellations.length, 1);
-  assert.equal(failed.cancellations[0].storeId, "store");
+  assert.equal(failed.cancellations[0].input.storeId, "store");
+  // The cancellation runs its fee effects after commit.
+  assert.equal(failed.cancellations[0].runner, failed.runReservationEffects);
   assert.equal(failed.notifications.length, 0);
 });
 
@@ -170,3 +193,149 @@ for (const options of [{ mode: "request" }, { source: "phone" }]) {
     assert.equal(fixture.notifications.length, 1);
   });
 }
+
+for (const source of ["online", "marketplace", "phone"]) {
+  test(`${source}: a closed card gate refuses the booking before anything is written`, async () => {
+    const fixture = checkoutFixture({
+      total: 10,
+      source,
+      gate: { accepts: false, reason: "payment_method_required" },
+    });
+    const result = await fixture.submit();
+    assert.equal(result.ok, false);
+    // Generic, with the store's contact: renters never see a billing reason.
+    assert.equal(result.error, "errors.storeNotAcceptingReservations");
+    assert.deepEqual({ ...result.params }, {
+      hasContact: "yes",
+      contact: "+33 6 12 34 56 78 · shop@example.test",
+    });
+    assert.deepEqual(fixture.gateChecks, [{ storeId: "store", surface: source }]);
+    assert.equal(fixture.writes.length, 0);
+    assert.equal(fixture.notifications.length, 0);
+    assert.equal(fixture.cancellations.length, 0);
+  });
+
+  test(`${source}: a closed card gate of a store with no contact says so`, async () => {
+    const fixture = checkoutFixture({
+      total: 10,
+      source,
+      gate: { accepts: false, reason: "payment_method_required" },
+      contact: { phone: null, email: null },
+    });
+    const result = await fixture.submit();
+    assert.equal(result.error, "errors.storeNotAcceptingReservations");
+    assert.deepEqual({ ...result.params }, { hasContact: "no", contact: "" });
+    assert.equal(fixture.writes.length, 0);
+  });
+
+  test(`${source}: an open card gate changes nothing`, async () => {
+    const fixture = checkoutFixture({ total: 10, source });
+    assert.equal((await fixture.submit()).ok, true);
+    assert.equal(fixture.gateChecks.length, 1);
+    assert.equal(fixture.writes.length, 1);
+  });
+}
+
+const writeSource = stripTypeScriptTypes(
+  source.slice(
+    source.indexOf("const writeReservation ="),
+    source.indexOf("/**\n * Internal reservation pipeline"),
+  ),
+);
+
+const writeFixture = ({ supersede }) => {
+  const events = [];
+  const tx = { insert: () => ({ values: async () => {} }) };
+  const write = runInNewContext(`${writeSource}; writeReservation`, {
+    db: {
+      transaction: async (work) => {
+        const result = await work(tx);
+        events.push("commit");
+        return result;
+      },
+    },
+    getBlockingReservationStatuses: () => [],
+    lockReservationProducts: async () => new Map(),
+    lockResumableCheckout: async (_tx, _storeId, resumable) => resumable,
+    reserveInventory: async () => ({
+      ok: true,
+      inventory: { resolvedCombinationByLineKey: new Map() },
+    }),
+    upsertCustomer: async () => ({ id: "customer", email: "guest@example.test" }),
+    saveCustomerFieldValues: async () => {},
+    saveCustomerProfileValues: async () => {},
+    saveCheckoutItemDetails: async () => {},
+    matchPendingCheckoutItems: () => [],
+    buildReservationValues: () => ({ status: "pending" }),
+    buildReservationItemValues: () => [],
+    isSamePendingCheckout: () => false,
+    nanoid: () => "replacement",
+    generateUniqueReservationNumber: async () => "TEST-2",
+    insertReservation: async () => ({ effects: [] }),
+    reservationItems: {},
+    reservationActivity: {},
+    toWholeSeconds: (date) => date,
+    supersedePendingCheckout: async () => {
+      events.push("supersede");
+      return supersede();
+    },
+    runReservationEffects: async (effects) => {
+      events.push(["run", [...effects]]);
+    },
+    expireCheckoutSessions: (_account, sessionIds) => {
+      events.push(["expire", [...sessionIds]]);
+    },
+  });
+  return {
+    events,
+    submit: () =>
+      write(
+        {
+          source: "online",
+          items: [],
+          customer: { email: "guest@example.test", firstName: "Test", lastName: "Guest" },
+        },
+        {
+          store: { id: "store", settings: null, stripeAccountId: "acct" },
+          promo: null,
+          window: {},
+          insurance: { appliedOptIn: false, amount: 0 },
+          advisorConversation: null,
+          checkoutFields: {
+            customerDefinitions: [],
+            customerValues: {},
+            profileValues: {},
+            itemDetails: [],
+          },
+        },
+        { id: "earlier", number: "TEST-1" },
+      ),
+  };
+};
+
+const VOID = { type: "legacy_fee.void", storeId: "store", reservationId: "earlier" };
+
+test("a resubmitted cart runs the superseded checkout's void after commit", async () => {
+  const fixture = writeFixture({
+    supersede: () => ({ sessionIds: ["cs_earlier"], effects: [VOID] }),
+  });
+
+  assert.equal((await fixture.submit()).ok, true);
+  assert.deepEqual(fixture.events, [
+    "supersede",
+    "commit",
+    ["run", [VOID]],
+    ["expire", ["cs_earlier"]],
+  ]);
+});
+
+test("a resubmitted cart that rolls back runs no effect", async () => {
+  const fixture = writeFixture({
+    supersede: () => {
+      throw new Error("Could not supersede checkout earlier: unexpected_status");
+    },
+  });
+
+  await assert.rejects(fixture.submit(), /unexpected_status/);
+  assert.deepEqual(fixture.events, ["supersede"]);
+});

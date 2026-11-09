@@ -252,6 +252,22 @@ export async function notifySubscriptionCancelled(store: StoreInfo): Promise<voi
 }
 
 /**
+ * A store paid a second plan through another open Checkout: its row keeps the
+ * subscription it held, and staff cancel and refund the extra one in Stripe.
+ */
+export async function notifyExtraPlanSubscription(
+  store: StoreInfo,
+  keptSubscriptionId: string,
+  extraSubscriptionId: string
+): Promise<void> {
+  if (!isEnabled()) return
+  const link = storeLink(store.name, store.slug)
+  await send(
+    `⚠️ ${link} paid a second plan subscription: ${extraSubscriptionId} is not recorded, the store keeps ${keptSubscriptionId}. Cancel and refund ${extraSubscriptionId} in Stripe.`
+  )
+}
+
+/**
  * Sync the store owner's payment-method status to their fromHello profile as the
  * `hasPaymentMethod` attribute. Drives activation journeys (e.g. an email nudge to a
  * pay-as-you-go owner to add a card and "lock" their offer). Fire-and-forget: never
@@ -503,4 +519,19 @@ export async function notifyAiRateLimitHit(
   } catch (error) {
     console.error('[Discord] AI rate limit notification failed:', error)
   }
+}
+
+// ---------------------------------------------------------------------------
+// Billing service sync
+// ---------------------------------------------------------------------------
+
+/**
+ * A billing sync alert (lib/billing-sync/alerts.ts), which already limits each kind
+ * to one message an hour. The message holds ids and counts, never personal data.
+ */
+export async function notifyBillingAlert(kind: string, message: string): Promise<void> {
+  if (!isEnabled()) return
+  // Discord refuses messages over 2,000 characters.
+  const text = message.length > 1800 ? `${message.slice(0, 1800)}…` : message
+  await send(`🧾 Billing sync alert (${kind}): ${text}`)
 }

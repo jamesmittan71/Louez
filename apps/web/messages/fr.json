@@ -214,8 +214,8 @@
       "sessionExpired": "Votre session a expiré. Reconnectez-vous puis réessayez.",
       "passwordSignUpDisabled": "La création de compte par mot de passe n'est pas disponible. Utilisez un code reçu par e-mail."
     },
-    "referralBanner": "{storeName} vous a invité sur Louez — créez votre boutique et démarrez avec {count} réservations offertes.",
-    "referralBannerGeneric": "🎁 Vous avez été invité sur Louez — créez votre boutique et démarrez avec {count} réservations offertes.",
+    "referralBanner": "{storeName} vous a invité sur Louez — créez votre boutique en quelques minutes.",
+    "referralBannerGeneric": "Vous avez été invité sur Louez — créez votre boutique en quelques minutes.",
     "socialProofRating": "4,9/5",
     "socialProofTrusted": "450+ loueurs nous font confiance pour gérer leurs locations",
     "review1Quote": "Nous avons quitté notre ancien logiciel devenu trop cher pour Louez.io… et franchement, aucun regret ! Simple, flexible, économique et efficace.",
@@ -224,8 +224,8 @@
     "review2Role": "Co-fondateur · Bloom",
     "review3Quote": "Louez.io est une plateforme fiable, claire et précise. La gestion de la saison sera beaucoup plus simple et rapide.",
     "review3Role": "Co-fondateur · Les Frères Complices",
-    "perk1": "Vos 15 premières réservations offertes",
-    "perk2": "1 € max par réservation, dégressif selon le volume, 0 % de commission, sans abonnement",
+    "perk1": "Réservations 24h/24, paiement et caution en ligne",
+    "perk2": "Contrats automatiques et espace client",
     "perk3": "Boutique en ligne prête en 5 minutes",
     "visitShop": "Voir la boutique",
     "name": "Nom",
@@ -251,6 +251,52 @@
     "hidePassword": "Masquer le mot de passe",
     "passwordRules": {
       "minLength": "Au moins {count} caractères"
+    },
+    "passkey": {
+      "prompt": {
+        "title": "Connectez-vous plus vite la prochaine fois"
+      },
+      "setup": {
+        "title": "Votre prochaine connexion, en un geste",
+        "description": "Créez une clé d’accès pour vous connecter avec votre empreinte, votre visage ou le code de votre appareil.",
+        "privacy": "Vos données biométriques restent sur votre appareil. Vos autres moyens de connexion restent disponibles.",
+        "account": "Pour votre compte",
+        "enable": "Créer ma clé d’accès",
+        "waiting": "Confirmez sur votre appareil…",
+        "later": "Plus tard",
+        "successTitle": "Votre clé d’accès est prête",
+        "successDescription": "Vous pourrez la choisir en priorité lors de votre prochaine connexion sur ce navigateur.",
+        "done": "Continuer"
+      },
+      "login": {
+        "title": "Heureux de vous retrouver",
+        "description": "Connectez-vous avec votre clé d’accès. Votre appareil vous demandera de confirmer votre identité.",
+        "continue": "Se connecter avec une clé d’accès",
+        "waiting": "En attente de votre appareil…",
+        "otherMethod": "Utiliser une autre méthode"
+      },
+      "settings": {
+        "title": "Clés d’accès",
+        "description": "Connectez-vous rapidement et en toute sécurité, sans saisir de mot de passe.",
+        "empty": "Aucune clé d’accès enregistrée pour le moment.",
+        "add": "Ajouter une clé d’accès",
+        "defaultName": "Clé d’accès",
+        "created": "Ajoutée le {date, date, medium}",
+        "unsupported": "Utilisez un navigateur compatible et une connexion sécurisée (HTTPS).",
+        "remove": "Supprimer",
+        "removeTitle": "Supprimer cette clé d’accès ?",
+        "removeDescription": "Elle ne permettra plus de vous connecter à Louez. Vous pourrez toujours utiliser vos autres moyens de connexion. Vous pouvez aussi la retirer du gestionnaire de clés de votre appareil.",
+        "removed": "Clé d’accès supprimée",
+        "cancel": "Annuler"
+      },
+      "reauthenticate": "Me reconnecter",
+      "errors": {
+        "cancelled": "La demande a été annulée ou a expiré. Réessayez ou utilisez une autre méthode.",
+        "alreadyRegistered": "Cette clé d’accès est déjà enregistrée. Vous pouvez l’utiliser pour vous connecter.",
+        "reauthenticate": "Pour protéger votre compte, reconnectez-vous avant de gérer vos clés d’accès.",
+        "rateLimited": "Trop de tentatives. Patientez une minute avant de réessayer.",
+        "failed": "Impossible d’utiliser cette clé d’accès. Réessayez ou choisissez une autre méthode."
+      }
     }
   },
   "invitation": {
@@ -422,6 +468,15 @@
       "newReservation": "Nouvelle réservation #{number}",
       "newReservationDescription": "Une nouvelle demande de réservation vient d'arriver"
     },
+    "reservationGate": {
+      "pausedTitle": "Les nouvelles réservations sont en pause",
+      "pausedDescription": "Les clients ne peuvent pas réserver en ligne et les nouvelles confirmations sont en attente tant que la facturation de la boutique n'est pas à jour.",
+      "noticeTitle": "La facturation demande votre attention",
+      "noticeDescription": "Vérifiez la facturation de la boutique pour continuer à recevoir des réservations.",
+      "manageBilling": "Gérer la facturation",
+      "storefrontDescription": "Les clients voient que la boutique ne prend pas de réservations en ligne.",
+      "openDashboard": "Accéder au tableau de bord"
+    },
     "pendingAlert": {
       "singlePending": "1 demande en attente",
       "multiplePending": "{count} demandes en attente",
@@ -557,8 +612,8 @@
       "link": {
         "title": "Parrainez et gagnez",
         "description": "Partagez votre lien et invitez d'autres loueurs à rejoindre Louez.",
-        "reward": "Pour chaque loueur parrainé qui réalise sa première vente, vous gagnez {referrer} réservations offertes (≈ {rewardValue}) — et votre filleul démarre avec {referred}.",
-        "rewardInvoiceCredit": "Pour chaque loueur parrainé qui réalise sa première vente, vous gagnez {rewardValue} de crédit sur votre facture Louez — et votre filleul démarre avec {referred} réservations offertes.",
+        "reward": "Pour chaque loueur parrainé qui réalise sa première vente, vous gagnez {referrer} réservations offertes (≈ {rewardValue}).",
+        "rewardInvoiceCredit": "Pour chaque loueur parrainé qui réalise sa première vente, vous gagnez {rewardValue} de crédit sur votre facture Louez.",
         "copyLink": "Copier le lien",
         "linkCopied": "Lien copié !",
         "linkCopyFailed": "Impossible de copier le lien.",
@@ -589,8 +644,8 @@
       },
       "nudge": {
         "title": "Vous aimez Louez ?",
-        "description": "Parrainez un loueur : vous gagnez tous les deux {count} réservations offertes (≈ {rewardValue}).",
-        "descriptionInvoiceCredit": "Parrainez un loueur : il démarre avec {count} réservations offertes, vous gagnez {rewardValue} de crédit.",
+        "description": "Parrainez un loueur : vous gagnez {count} réservations offertes (≈ {rewardValue}) dès sa première vente en ligne.",
+        "descriptionInvoiceCredit": "Parrainez un loueur : vous gagnez {rewardValue} de crédit dès sa première vente en ligne.",
         "cta": "Parrainer",
         "dismiss": "Fermer"
       },
@@ -604,7 +659,7 @@
         "open": "Comment ça marche",
         "title": "Comment fonctionne le parrainage",
         "step1": "Partagez votre lien d'invitation avec d'autres loueurs.",
-        "step2": "Votre filleul démarre avec {count} réservations offertes dès son inscription.",
+        "step2": "Votre filleul crée sa boutique Louez avec votre lien.",
         "step3": "Dès que votre filleul réalise sa première vente en ligne d'au moins {minAmount}, vous gagnez {count} réservations offertes.",
         "step3InvoiceCredit": "Dès que votre filleul réalise sa première vente en ligne d'au moins {minAmount}, vous gagnez un crédit sur votre prochaine facture Louez.",
         "note": "Seules les ventes payées en ligne (carte/Stripe) déclenchent la récompense — les paiements manuels ou en espèces ne comptent pas. Les réservations offertes sont des locations sans commission Louez."
@@ -765,7 +820,7 @@
         "tagline": {
           "label": "Slogan",
           "description": "Une phrase sous le nom, en haut de la page d'accueil. {max} caractères maximum.",
-          "placeholder": "Location de vélos et de paddles à Carnac depuis 2012"
+          "placeholder": "Décrivez votre activité en une phrase…"
         },
         "descriptionHint": "Le texte de la page À propos. Sans slogan, il s'affiche aussi en haut de l'accueil.",
         "logos": {
@@ -1927,6 +1982,20 @@
             "unassigned": "Désassignée d'une réservation",
             "updated": "Unité modifiée"
           }
+        },
+        "customerFields": {
+          "title": "Informations demandées au client",
+          "description": "Demandées en ligne ou notées par article.",
+          "scope": {
+            "customer": "Fiche client",
+            "item": "Par article"
+          },
+          "collect": {
+            "never": "Équipe uniquement",
+            "optional": "En ligne · Facultatif",
+            "required": "En ligne · Obligatoire"
+          },
+          "manage": "Gérer dans Fiche client"
         }
       }
     },
@@ -2405,10 +2474,31 @@
       },
       "contract": {
         "title": "Contrat",
-        "signed": "Signé le {date}",
-        "notSigned": "Non signé",
         "generate": "Générer le contrat",
-        "download": "Télécharger"
+        "download": "Télécharger",
+        "signedBadge": "Contrat signé",
+        "unsignedBadge": "Contrat non signé",
+        "signedOn": "Le {date}",
+        "unsignedTooltip": "Le client n'a pas encore accepté le contrat. Il peut le signer depuis le lien reçu par email, ou sur place au retrait.",
+        "methods": {
+          "checkout": "Accepté à la réservation en ligne",
+          "payment_page": "Signé sur la page de paiement",
+          "account": "Signé depuis l'espace client",
+          "in_store": "Signé sur place"
+        },
+        "signInStore": "Faire signer sur place",
+        "sendSignatureLink": "Envoyer pour signature",
+        "signatureLinkSent": "Lien de signature envoyé au client",
+        "signDialog": {
+          "title": "Signature du contrat sur place",
+          "description": "Laissez le client relire le contrat puis signer sur cet appareil. Sa signature et son nom figureront sur le contrat.",
+          "viewContract": "Ouvrir le contrat",
+          "signerName": "Nom du signataire",
+          "acceptance": "Le client a pris connaissance du contrat et des conditions générales de location et les accepte.",
+          "confirm": "Valider la signature",
+          "success": "Contrat signé",
+          "alreadySigned": "Ce contrat est déjà signé."
+        }
       },
       "notes": {
         "title": "Notes internes",
@@ -2686,6 +2776,9 @@
         "quote_accepted": "Devis accepté",
         "quote_declined": "Devis refusé",
         "overbooked": "Sur-réservée",
+        "contract_signed": "Contrat signé",
+        "contractUnsigned": "Sans contrat signé",
+        "signedBy": "Signé par {name}",
         "showAll": "Voir tout ({count} événements)",
         "showLess": "Voir moins",
         "paymentFailure": {
@@ -2747,6 +2840,11 @@
         "warningDepositTitle": "Caution non encaissée",
         "warningDepositDescription": "La caution de {amount} n'a pas encore été encaissée. Assurez-vous de l'encaisser avant la remise du matériel.",
         "acknowledgePickupWarnings": "Je comprends et souhaite continuer malgré ces avertissements",
+        "contractUnsigned": "Contrat non signé",
+        "warningContractTitle": "Contrat non signé",
+        "warningContractDescription": "Le client n'a pas encore signé son contrat. Faites-le signer sur place, ou continuez sans signature : ce sera noté dans l'historique.",
+        "acknowledgePickupWithoutSignature": "Je comprends et souhaite continuer, même sans contrat signé",
+        "warningContractRequiredDescription": "Votre boutique exige la signature du contrat avant le retrait. Faites signer le client sur place pour continuer.",
         "confirmPickup": "Confirmer le retrait",
         "returnConfirmTitle": "Confirmer le retour",
         "returnConfirmDescription": "Vérifiez l'état du matériel et le résumé financier avant de confirmer le retour.",
@@ -3104,15 +3202,28 @@
       },
       "filter": {
         "type": "Type de client",
-        "all": "Tous les clients"
+        "all": "Tous les clients",
+        "created": "Date de création",
+        "anyDate": "Toutes les dates",
+        "source": "Origine",
+        "allSources": "Toutes les origines",
+        "channel": "Canal",
+        "allChannels": "Tous les canaux",
+        "reset": "Réinitialiser les filtres",
+        "importRun": "Issus d'un import",
+        "noResults": "Aucun client ne correspond à ces filtres.",
+        "from": "Du {date}",
+        "to": "au {date}",
+        "more": "Filtres",
+        "createdFrom": "Créés à partir du",
+        "createdTo": "Créés jusqu'au",
+        "remove": "Retirer le filtre"
       },
       "deleteConfirm": {
         "title": "Supprimer ce client ?",
         "description": "Cette action est irréversible. Le client sera définitivement supprimé."
       },
       "form": {
-        "personalInfo": "Informations personnelles",
-        "personalInfoDescription": "Les informations de base du client",
         "businessCustomer": "Client professionnel",
         "businessCustomerDescription": "Cochez si ce client représente une entreprise",
         "companyName": "Nom de l'entreprise",
@@ -3132,8 +3243,6 @@
         "emailPlaceholder": "jean.dupont@example.com",
         "phone": "Téléphone",
         "phonePlaceholder": "06 12 34 56 78",
-        "addressSection": "Adresse",
-        "addressDescription": "L'adresse du client (optionnel)",
         "address": "Adresse",
         "addressPlaceholder": "123 rue de la Paix",
         "postalCode": "Code postal",
@@ -3146,7 +3255,17 @@
         "internalNotesDescription": "Notes privées sur ce client (non visibles par le client)",
         "notesPlaceholder": "Ajoutez des notes sur ce client...",
         "save": "Enregistrer",
-        "createCustomer": "Créer le client"
+        "createCustomer": "Créer le client",
+        "customerKind": "Type de client",
+        "birthDate": "Date de naissance",
+        "ageYears": "{age, plural, one {# an} other {# ans}}",
+        "acquisitionSource": "Comment vous a-t-il connu ?",
+        "acquisitionSourcePlaceholder": "Choisir",
+        "acquisitionSourceDetail": "Précisez",
+        "acquisitionSourceDetailPlaceholder": "Office de tourisme, salon, hôtel partenaire…",
+        "socialSection": "Réseaux et liens",
+        "customizeFields": "Personnaliser les champs",
+        "fieldsTitle": "Informations du client"
       },
       "countries": {
         "FR": "France",
@@ -3161,6 +3280,80 @@
       "quickCreate": {
         "title": "Nouveau client",
         "description": "Le client sera créé et sélectionné automatiquement."
+      },
+      "sources": {
+        "word_of_mouth": "Bouche-à-oreille",
+        "search_engine": "Recherche Google",
+        "social_media": "Réseaux sociaux",
+        "walk_in": "Passage devant la boutique",
+        "partner": "Partenaire ou office de tourisme",
+        "ads": "Publicité",
+        "returning": "Déjà client",
+        "other": "Autre"
+      },
+      "channels": {
+        "dashboard": "Créé par l'équipe",
+        "storefront": "Boutique en ligne",
+        "marketplace": "reeent",
+        "import": "Import",
+        "api": "API",
+        "ai": "Assistant IA"
+      },
+      "social": {
+        "add": "Ajouter un lien",
+        "remove": "Retirer {network}",
+        "open": "Ouvrir {network}",
+        "placeholderHandle": "@pseudo ou lien du profil",
+        "placeholderWebsite": "https://…",
+        "placeholderWhatsapp": "+33 6 12 34 56 78",
+        "whatsapp": "WhatsApp",
+        "empty": "Aucun lien"
+      },
+      "fields": {
+        "yes": "Oui",
+        "no": "Non",
+        "reveal": "Afficher",
+        "hide": "Masquer",
+        "copy": "Copier",
+        "copied": "Copié",
+        "selectPlaceholder": "Choisir",
+        "suspicious": "Ce numéro semble invalide. Vérifiez-le : il sera tout de même enregistré.",
+        "duplicate": "Déjà utilisé par {name}.",
+        "viewCustomer": "Voir la fiche",
+        "complete": "{count, plural, one {Compléter # champ} other {Compléter # champs}}",
+        "issues": {
+          "required": "Ce champ est obligatoire.",
+          "invalidNumber": "Saisissez un nombre.",
+          "invalidDate": "Date invalide.",
+          "invalidOption": "Choisissez une valeur de la liste.",
+          "invalidEmail": "Adresse e-mail invalide.",
+          "invalidPhone": "Numéro de téléphone invalide.",
+          "invalidUrl": "Lien invalide."
+        }
+      },
+      "detail": {
+        "newReservation": "Nouvelle réservation",
+        "edit": "Modifier",
+        "moreActions": "Autres actions",
+        "createdVia": "Créé via : {channel}",
+        "bornOn": "Né(e) le {date}",
+        "source": "Origine",
+        "lastRental": "Dernière location",
+        "never": "Jamais",
+        "editSection": "Modifier : {section}",
+        "editSectionDescription": "Seules ces informations seront modifiées.",
+        "sectionSaved": "Modifications enregistrées",
+        "save": "Enregistrer",
+        "cancel": "Annuler",
+        "infoCard": "Informations",
+        "emptyInfo": "Rien de renseigné pour l'instant."
+      },
+      "pagination": {
+        "showing": "{from}–{to} sur {total}",
+        "perPage": "Par page",
+        "previous": "Page précédente",
+        "next": "Page suivante",
+        "pageOf": "Page {page} sur {pages}"
       }
     },
     "calendar": {
@@ -3748,6 +3941,12 @@
         "manageBilling": "Gérer la facturation",
         "changePlan": "Changer de plan",
         "changePlanDescription": "Comparez les fonctionnalités et choisissez le plan adapté à vos besoins.",
+        "changePlanPreviewLoading": "Calcul du montant à payer…",
+        "changePlanChargedNow": "Montant prélevé aujourd’hui : {amount}. Votre nouveau plan commence tout de suite.",
+        "changePlanNothingToPay": "Rien à payer aujourd’hui. Votre nouveau plan commence tout de suite.",
+        "changePlanAtPeriodEnd": "Rien à payer aujourd’hui. Votre nouveau plan commence le {date}. D’ici là, vous gardez votre plan actuel.",
+        "pendingPlanChange": "{currentPlan} jusqu’au {date}, puis {newPlan} {interval, select, yearly {annuel} other {mensuel}}.",
+        "keepCurrentPlan": "Garder {plan}",
         "cancelSubscription": "Annuler l'abonnement",
         "subscribe": "S'abonner",
         "selectPlan": "Choisir ce plan",
@@ -3910,6 +4109,133 @@
       "team": "Équipe",
       "saveChanges": "Enregistrer les modifications",
       "settingsSaved": "Paramètres enregistrés",
+      "billingReturn": {
+        "refreshed": "La facturation est à jour.",
+        "pending": "Les changements de facturation peuvent mettre quelques minutes à apparaître ici."
+      },
+      "billing": {
+        "label": "Facturation",
+        "description": "Votre offre Louez, le mois en cours, votre carte et vos informations de facturation, et vos relevés.",
+        "offerTitle": "Votre offre Louez",
+        "offerPending": "Votre offre s'affichera ici dès que Louez aura mis en place la facturation de cette boutique.",
+        "status": {
+          "accepting": "Réservations ouvertes",
+          "blocked": "Réservations en pause"
+        },
+        "blocked": {
+          "payment_method_required": "Ajoutez une carte de facturation pour accepter de nouvelles réservations.",
+          "payment_overdue": "Un paiement de la facturation Louez a échoué. Réglez-le pour accepter de nouvelles réservations.",
+          "balance_limit_reached": "Votre solde à régler a atteint le plafond prévu sans carte. Ajoutez une carte de facturation et les réservations reprennent.",
+          "suspended": "La facturation de cette boutique est suspendue. Contactez Louez pour accepter de nouveau des réservations."
+        },
+        "readOnly": "En tant qu'administrateur de la plateforme, vous consultez la facturation de cette boutique en lecture seule.",
+        "manage": "Gérer la facturation",
+        "loadFailed": "La facturation n'a pas pu se charger. Réessayez dans un instant.",
+        "settingUp": "Votre facturation est en cours de mise en place. Revenez sur cette page dans quelques minutes.",
+        "month": {
+          "title": "Ce mois-ci",
+          "atSource": "Prélevé à la source",
+          "due": "Reste à payer prévu",
+          "credit": "Crédit prévu",
+          "statementAt": "Prochain relevé : {date}."
+        },
+        "card": {
+          "title": "Carte de facturation",
+          "description": "Louez débite sur cette carte ce que les frais prélevés à la source ne couvrent pas.",
+          "saved": "{brand} se terminant par {last4}",
+          "otherBrand": "Carte",
+          "onFile": "Un moyen de paiement est enregistré.",
+          "expires": "Expire en {date}",
+          "expired": "Expirée depuis {date}. Remplacez-la pour que vos relevés puissent être payés.",
+          "missing": "Aucune carte de facturation pour l'instant.",
+          "unknown": "Votre carte de facturation ne s'affiche pas encore ici.",
+          "notNeeded": "Aucune carte nécessaire : rien n'est facturé à votre boutique.",
+          "inLouez": "Le moyen de paiement de cette boutique se gère pour l'instant dans son abonnement.",
+          "balance": "Solde impayé : {amount}",
+          "balanceWithLimit": "Solde impayé : {amount} · limite {limit}",
+          "addCardNotice": "Ajoutez une carte pour que vos relevés soient réglés sans action de votre part.",
+          "add": "Ajouter une carte",
+          "replace": "Remplacer la carte",
+          "opening": "Ouverture de Stripe…",
+          "stripeNote": "Vous saisissez votre carte sur la page sécurisée de Stripe, puis vous revenez ici.",
+          "startFailed": "La page de Stripe n'a pas pu s'ouvrir. Réessayez dans un instant.",
+          "off": "L'ajout d'une carte n'est pas encore disponible."
+        },
+        "details": {
+          "title": "Informations de facturation",
+          "description": "Ces informations figurent sur les factures de Louez.",
+          "noCustomer": "Ajoutez d'abord une carte de facturation. Vos informations de facturation sont enregistrées avec elle.",
+          "unavailable": "Vos informations de facturation ne peuvent pas s'afficher pour le moment. Réessayez plus tard.",
+          "legalName": "Raison sociale",
+          "legalNameHint": "Le nom de votre entreprise, tel qu'il est enregistré.",
+          "email": "E-mail de facturation",
+          "emailHint": "Les factures et les reçus de paiement sont envoyés à cette adresse.",
+          "line1": "Adresse",
+          "line2": "Complément d'adresse (facultatif)",
+          "postalCode": "Code postal",
+          "city": "Ville",
+          "state": "Région ou État (facultatif)",
+          "country": "Pays",
+          "countryPlaceholder": "Choisissez un pays",
+          "vatNumber": "Numéro de TVA intracommunautaire (facultatif)",
+          "vatNumberHint": "Avec son code pays, par exemple FR12345678901. Laissez vide si votre entreprise n'en a pas.",
+          "vat": {
+            "pending": "Vérification de ce numéro auprès de VIES, le service européen des numéros de TVA. Rechargez la page dans quelques minutes.",
+            "verified": "VIES confirme ce numéro de TVA.",
+            "unverified": "VIES ne reconnaît pas ce numéro de TVA. Vérifiez-le, puis enregistrez à nouveau.",
+            "unavailable": "VIES n'a pas pu être joint pour vérifier ce numéro. Enregistrez à nouveau plus tard.",
+            "unknown": "Ce numéro de TVA n'a pas encore été vérifié."
+          },
+          "errors": {
+            "required": "Ce champ est obligatoire.",
+            "email": "Saisissez une adresse e-mail valide.",
+            "refused": "Cette valeur a été refusée. Vérifiez-la et réessayez.",
+            "vatNumber": "Ce numéro de TVA a été refusé. Saisissez un numéro de TVA européen avec son code pays, par exemple FR12345678901.",
+            "unavailable": "Vos informations de facturation ne peuvent pas encore être enregistrées. Ajoutez d'abord une carte de facturation.",
+            "failed": "Vos informations de facturation n'ont pas pu être enregistrées. Réessayez dans un instant."
+          },
+          "save": "Enregistrer",
+          "saved": "Informations de facturation enregistrées."
+        },
+        "statements": {
+          "title": "Relevés",
+          "description": "Ce que Louez facture à votre boutique, mois par mois.",
+          "notFinal": "Pas encore définitif : ces montants suivent vos réservations et vos paiements tels qu'ils sont. Les factures ne sont pas encore disponibles.",
+          "open": "Provisoire",
+          "summary": "Dû {owed} · Prélevé à la source {atSource}",
+          "creditOf": "Crédit de {amount}",
+          "legacy": "Pour l'instant, Louez facture votre boutique comme avant. Vos relevés apparaîtront ici dès que votre facturation passera sur cette page.",
+          "legacyUntil": "Louez facture votre boutique comme avant jusqu'au {date}. Vos relevés apparaissent ici à partir de cette date.",
+          "empty": "Aucun relevé pour l'instant. Le premier apparaîtra ici dès que quelque chose sera facturé à votre boutique."
+        },
+        "statement": {
+          "totals": "Totaux",
+          "owed": "Dû",
+          "atSource": "Prélevé à la source",
+          "due": "Reste à payer",
+          "credit": "Crédit",
+          "groups": {
+            "commission": "Commission sur les paiements",
+            "unpaid": "Commission sur les montants impayés",
+            "reservations": "Frais de réservation",
+            "marketplace": "Frais de la marketplace",
+            "atSource": "Prélevé à la source"
+          },
+          "lines": {
+            "pay": "Paiement",
+            "refund": "Remboursement",
+            "dispute_open": "Litige ouvert",
+            "dispute_close": "Litige gagné",
+            "uncollected": "Part impayée de la réservation",
+            "rental": "Réservation",
+            "mkt": "Réservation via la marketplace",
+            "fee": "Frais prélevés à la source",
+            "feerefund": "Frais remboursés à la source"
+          },
+          "reservation": "Réservation {number}",
+          "adjusts": "Correction pour {period}"
+        }
+      },
       "nav": {
         "storeDescription": "Informations et configuration",
         "appearanceDescription": "Logo, couleurs et thème",
@@ -4115,14 +4441,14 @@
         "reminderReturnEnabledHint": "Envoyer un rappel la veille de la fin de location",
         "customization": "Personnalisation des emails",
         "customizationDescription": "Personnalisez le contenu de chaque type d'email. Laissez vide pour utiliser les valeurs par défaut.",
-        "customized": "Personnalise",
-        "customMessage": "Message personnalise (optionnel)",
-        "customMessagePlaceholder": "Ajoutez un message personnalise qui apparaitra dans l'email...",
-        "customMessageHint": "Ce message s'affichera dans le corps de l'email, apres le contenu par defaut.",
+        "customized": "Personnalisé",
+        "customMessage": "Message personnalisé (optionnel)",
+        "customMessagePlaceholder": "Ajoutez un message personnalisé qui apparaîtra dans l'email...",
+        "customMessageHint": "Ce message s'affichera dans le corps de l'email, après le contenu par défaut.",
         "preview": {
           "subject": "Objet",
           "yourStore": "Votre boutique",
-          "noCustomMessage": "Aucun message personnalise - le contenu par defaut sera utilise"
+          "noCustomMessage": "Aucun message personnalisé - le contenu par défaut sera utilisé"
         },
         "emailTypes": {
           "confirmationContent": "Confirmation",
@@ -4493,6 +4819,14 @@
           "statusRequired": "Sélectionnez au moins un statut.",
           "noContracts": "Aucune réservation ne correspond à cette période et à ces statuts.",
           "exportFailed": "L'export a échoué. Veuillez réessayer."
+        },
+        "customers": {
+          "title": "Clients",
+          "description": "Exportez vos fiches clients : coordonnées, date de naissance, origine, canal de création et vos champs personnalisés.",
+          "button": "Exporter les clients",
+          "dateRangeHint": "La période porte sur la date de création des fiches. Laissez-la vide pour exporter tous vos clients.",
+          "includeSensitive": "Inclure les données sensibles",
+          "includeSensitiveWarning": "Les champs marqués comme sensibles figureront en clair dans le fichier : conservez-le en lieu sûr."
         }
       },
       "embed": {
@@ -4991,9 +5325,9 @@
         "modeOptional": "Au choix du client",
         "modeOptionalDescription": "Le client choisit entre retrait en magasin ou livraison",
         "modeRequired": "Livraison obligatoire",
-        "modeRequiredDescription": "La livraison est imposée, pas d'option de retrait",
+        "modeRequiredDescription": "Livraison et reprise à l'adresse du client, sans retrait ni retour en boutique",
         "modeIncluded": "Livraison incluse",
-        "modeIncludedDescription": "La livraison est obligatoire et gratuite",
+        "modeIncludedDescription": "Livraison et reprise à l'adresse du client, gratuitement",
         "noCoordinatesWarning": "Vous devez configurer l'adresse de votre boutique avec la localisation sur la carte pour activer la livraison.",
         "noCoordinatesError": "Veuillez d'abord configurer l'adresse de votre boutique avec la localisation GPS.",
         "goToStoreSettings": "Renseigner l'adresse",
@@ -5063,9 +5397,9 @@
         }
       },
       "inspection": {
-        "title": "Etat des lieux",
+        "title": "État des lieux",
         "description": "Documentez l'état du matériel au départ et au retour",
-        "nav": "Etat des lieux",
+        "nav": "État des lieux",
         "enableSection": "Fonctionnalité d'état des lieux",
         "enableSectionDescription": "Documentez l'état du matériel avec photos et signature",
         "enabled": "Activer les états des lieux",
@@ -5102,7 +5436,7 @@
           "damaged": "Endommagé"
         },
         "card": {
-          "title": "Etat des lieux",
+          "title": "État des lieux",
           "departure": "Départ",
           "return": "Retour",
           "notDone": "Non effectué",
@@ -5117,20 +5451,20 @@
           "downloadPdf": "Télécharger le PDF"
         },
         "wizard": {
-          "title": "Etat des lieux - {type}",
-          "titleDeparture": "Etat des lieux - Départ",
-          "titleReturn": "Etat des lieux - Retour",
-          "step": "Etape {current} sur {total}",
+          "title": "État des lieux - {type}",
+          "titleDeparture": "État des lieux - Départ",
+          "titleReturn": "État des lieux - Retour",
+          "step": "Étape {current} sur {total}",
           "step_overview": "Aperçu",
-          "step_items": "Equipements",
+          "step_items": "Équipements",
           "step_summary": "Résumé",
           "step_signature": "Signature",
           "overview": "Aperçu",
-          "items": "Equipements",
+          "items": "Équipements",
           "summary": "Résumé",
           "signature": "Signature",
-          "departureInspection": "Etat des lieux - Départ",
-          "returnInspection": "Etat des lieux - Retour",
+          "departureInspection": "État des lieux - Départ",
+          "returnInspection": "État des lieux - Retour",
           "reservation": "Réservation",
           "itemsToInspect": "{count, plural, one {équipement à inspecter} other {équipements à inspecter}}",
           "instructions": "Instructions",
@@ -5143,14 +5477,14 @@
           "allOkDescription": "Marquer tous les équipements en excellent état",
           "quantity": "Quantité",
           "unitReference": "Référence {identifier}",
-          "condition": "Etat général",
+          "condition": "État général",
           "photos": "Photos",
           "notes": "Remarques",
           "notesPlaceholder": "Ajoutez des remarques sur l'état de l'équipement...",
           "damageDetected": "Dommage détecté",
           "allGood": "Tout est en ordre",
           "summaryItems": "{count, plural, one {# équipement inspecté} other {# équipements inspectés}}",
-          "itemsWithIssues": "Equipements avec remarques",
+          "itemsWithIssues": "Équipements avec remarques",
           "globalNotes": "Notes générales",
           "globalNotesPlaceholder": "Ajoutez des notes générales sur l'inspection...",
           "signingAs": "Signature de {name}",
@@ -5167,8 +5501,8 @@
           "previous": "Précédent",
           "complete": "Terminer",
           "saving": "Enregistrement...",
-          "saved": "Etat des lieux enregistré",
-          "inspectionComplete": "Etat des lieux terminé avec succès",
+          "saved": "État des lieux enregistré",
+          "inspectionComplete": "État des lieux terminé avec succès",
           "inspectionError": "Erreur lors de l'enregistrement",
           "photoInvalidType": "Format d'image non supporté",
           "photoTooLarge": "Image trop volumineuse (max 20 Mo)",
@@ -5182,7 +5516,7 @@
             "description": "L'état des lieux retour a marqué des unités suivies comme endommagées. Sélectionnez les unités à placer en réparation sans date de fin.",
             "singleQuestion": "Créer une indisponibilité réparation pour {identifier} ?",
             "multipleQuestion": "Créer des indisponibilités réparation pour {count, plural, one {# unité endommagée} other {# unités endommagées}} ?",
-            "note": "Etat des lieux retour - réservation #{reservationNumber}",
+            "note": "État des lieux retour - réservation #{reservationNumber}",
             "noneSelected": "Sélectionnez au moins une unité",
             "createdToast": "{count, plural, one {Indisponibilité réparation créée} other {Indisponibilités réparation créées}}",
             "conflictsToast": "Conflits détectés - gérez-les depuis la fiche produit",
@@ -5263,12 +5597,12 @@
           "createPayment": "Créer un paiement"
         },
         "activity": {
-          "departureStarted": "Etat des lieux de départ commencé",
-          "departureCompleted": "Etat des lieux de départ terminé",
-          "returnStarted": "Etat des lieux de retour commencé",
-          "returnCompleted": "Etat des lieux de retour terminé",
+          "departureStarted": "État des lieux de départ commencé",
+          "departureCompleted": "État des lieux de départ terminé",
+          "returnStarted": "État des lieux de retour commencé",
+          "returnCompleted": "État des lieux de retour terminé",
           "damageDetected": "Dommage détecté : {description}",
-          "signed": "Etat des lieux signé par le client"
+          "signed": "État des lieux signé par le client"
         },
         "prompt": {
           "departureTitle": "Effectuer l'état des lieux ?",
@@ -5517,6 +5851,7 @@
           "membershipsLeft": "Vous quitterez aussi {count, plural, one {# autre boutique} other {# autres boutiques}} dont vous êtes membre.",
           "businessDocumentsDeleted": "{count, plural, one {# facture métier de votre boutique sera supprimée de Louez} other {# factures métier de vos boutiques seront supprimées de Louez}}. Exportez-les avant de continuer si vous devez les conserver.",
           "legalRetention": "{count, plural, one {# justificatif de facturation Louez sera conservé} other {# justificatifs de facturation Louez seront conservés}} pendant 10 ans à compter de la clôture de l’exercice, dans une archive séparée à accès limité.",
+          "googleCalendarNotice": "Louez supprimera l’agenda qu’il a créé dans votre Google Agenda. Si Google ne permet plus à Louez d’y accéder, cet agenda restera dans votre compte Google : vous pourrez le supprimer depuis Google Agenda.",
           "confirmationLabel": "Saisissez {email} pour confirmer",
           "passwordLabel": "Mot de passe actuel",
           "passwordRequired": "Saisissez votre mot de passe actuel.",
@@ -5778,7 +6113,9 @@
           "defaultBadge": "Recommandée",
           "defaultVoice": "Voix recommandée",
           "title": "Choisir la voix de votre agent",
-          "description": "Écoutez les voix et choisissez celle qui représentera votre boutique au téléphone."
+          "description": "Écoutez les voix et choisissez celle qui représentera votre boutique au téléphone.",
+          "languageVoices": "Pour cette langue",
+          "allVoices": "Toutes les voix"
         },
         "setup": {
           "step1": "Choisir votre numéro",
@@ -5838,7 +6175,7 @@
         },
         "notConfigured": {
           "title": "Téléphonie non configurée",
-          "description": "L'opérateur de la plateforme doit configurer un fournisseur de téléphonie (AI_PHONE_ENABLED, VOICE_PROVIDER et les identifiants) pour activer l'agent vocal."
+          "description": "La téléphonie ou le service vocal est incomplet. Contactez l’administrateur de la plateforme pour activer l’agent."
         },
         "language": "Langue de réponse",
         "languageDescription": "La langue dans laquelle l'assistant parle aux appelants",
@@ -5868,7 +6205,10 @@
           "male": "Homme"
         },
         "voicePreview": "Écouter",
-        "voiceRecommended": "Recommandée"
+        "voiceRecommended": "Recommandée",
+        "voiceMigrated": "Votre ancienne voix a été remplacée par la voix GPT-Live recommandée. Vous pouvez en choisir une autre ci-dessous.",
+        "voicePreviewError": "L’aperçu est indisponible pour le moment. Réessayez dans quelques instants.",
+        "voicePreviewUnavailable": "Les aperçus seront disponibles une fois le service vocal configuré."
       },
       "settingsNavigation": {
         "label": "Navigation des paramètres",
@@ -5895,8 +6235,7 @@
             "enableLabel": "Activer le canal reeent",
             "benefits": {
               "visibility": "De nouveaux clients issus de la recherche reeent.",
-              "seo": "Une page dédiée à votre établissement, référencée sur les moteurs de recherche.",
-              "free": "Gratuit au lancement, sans commission sur vos réservations."
+              "seo": "Une page dédiée à votre établissement, référencée sur les moteurs de recherche."
             }
           },
           "storefront": {
@@ -5947,7 +6286,7 @@
             },
             "marketplaceTermsAccepted": {
               "label": "Conditions de la marketplace acceptées",
-              "description": "La marketplace est gratuite au lancement. Les conditions réservent la possibilité d'introduire plus tard une commission sur les réservations issues de la marketplace.",
+              "description": "Les conditions de la marketplace s'appliquent aux réservations venues de reeent, en plus de votre offre Louez.",
               "acceptedAt": "Accepté le {date}"
             }
           }
@@ -5990,13 +6329,478 @@
           "memberTitle": "Offre reeent à vie — 0 € de commission reeent",
           "memberRank": "Membre n°{rank} de la cohorte de lancement",
           "incentiveBadge": "Offre de lancement",
-          "incentiveLine": "encore {remaining} places avec 0 € de commission reeent à vie"
+          "incentiveLine": "encore {remaining} places avec 0 € de commission reeent à vie",
+          "dismiss": "Masquer"
         }
       },
       "extensions": {
         "title": "Prolongations automatiques",
         "description": "Les clients peuvent prolonger si le matériel est disponible et le supplément calculable. Les cas particuliers nécessitent votre accord.",
         "maxDays": "Nombre de jours supplémentaires maximum (vide : sans limite)"
+      },
+      "contractSignature": {
+        "title": "Signature du contrat",
+        "description": "Ce qui se passe quand vous marquez une réservation récupérée alors que le client n'a pas signé son contrat.",
+        "optional": "Optionnelle",
+        "optionalDescription": "Pas d'alerte au retrait. Le badge « Contrat non signé » reste visible sur la réservation.",
+        "recommended": "Recommandée",
+        "recommendedDescription": "Une alerte propose de faire signer sur place. Vous pouvez remettre le matériel sans signature, c'est noté dans l'historique.",
+        "required": "Obligatoire",
+        "requiredDescription": "Le retrait est refusé tant que le contrat n'est pas signé, en ligne par le client ou sur place."
+      },
+      "customerFields": {
+        "title": "Fiche client",
+        "native": {
+          "birthDate": "Date de naissance",
+          "acquisitionSource": "Origine du client",
+          "socialLinks": "Réseaux et liens"
+        },
+        "field": {
+          "add": "Ajouter un champ",
+          "delete": "Supprimer définitivement",
+          "drag": "Réorganiser"
+        },
+        "badges": {
+          "required": "Obligatoire",
+          "sensitive": "Sensible",
+          "online": {
+            "optional": "En ligne · Facultatif",
+            "required": "En ligne · Obligatoire"
+          },
+          "noTarget": "Aucun produit choisi",
+          "hidden": "Masqué",
+          "louez": "Champ Louez"
+        },
+        "dialog": {
+          "label": "Libellé",
+          "labelPlaceholder": "Numéro de permis",
+          "options": "Choix proposés",
+          "optionsPlaceholder": "Tapez un choix puis Entrée",
+          "unit": "Unité",
+          "unitPlaceholder": "cm, kg, km…",
+          "helpText": "Aide à la saisie",
+          "helpTextPlaceholder": "Indication affichée sous le champ",
+          "appliesTo": "S'applique à",
+          "appliesToAll": "Tous",
+          "appliesToIndividual": "Particuliers",
+          "appliesToBusiness": "Entreprises",
+          "types": {
+            "text": "Texte",
+            "textarea": "Texte long",
+            "number": "Nombre",
+            "date": "Date",
+            "select": "Liste de choix",
+            "checkbox": "Oui / Non",
+            "phone": "Téléphone",
+            "email": "E-mail",
+            "url": "Lien"
+          },
+          "flags": {
+            "requiredHelp": "Impossible d'enregistrer la fiche sans ce champ.",
+            "sensitive": "Donnée sensible",
+            "sensitiveHelp": "Masquée par défaut sur la fiche et exclue des exports.",
+            "contract": "Afficher sur le contrat",
+            "contractHelp": "Ajoutée sous les coordonnées du client.",
+            "search": "Inclure dans la recherche",
+            "searchHelp": "Tapez la valeur pour retrouver le client. Signale aussi les doublons.",
+            "list": "Afficher dans la liste",
+            "listHelp": "Ajoute une colonne à la liste des clients.",
+            "requiredTeam": "Obligatoire pour l'équipe",
+            "sensitiveItemHelp": "Masquée par défaut sur la réservation.",
+            "contractItemHelp": "Ajoutée sous la ligne de l'article loué."
+          },
+          "labelPlaceholderItem": "Pointure",
+          "scopes": {
+            "customerDescription": "Une valeur par client : permis, pièce d'identité…",
+            "item": "Par article loué",
+            "itemDescription": "Une valeur par personne ou par matériel : taille, pointure…"
+          },
+          "online": {
+            "title": "Réservation en ligne",
+            "description": "Ce que le client renseigne en réservant sur votre boutique."
+          }
+        },
+        "templates": {
+          "dialogTitle": "Modèles de champs",
+          "dialogDescription": "Ajoutez un ensemble de champs en un clic. Vous pourrez ensuite les renommer, les réorganiser ou les archiver.",
+          "privacyNote": "Ne collectez que ce dont vous avez réellement besoin : vous êtes responsable des données de vos clients.",
+          "groups": {
+            "country": "Par pays",
+            "activity": "Par activité",
+            "general": "Général"
+          },
+          "adopt": "Ajouter",
+          "adopted": "Ajouté",
+          "fieldsCount": "{count, plural, one {# champ} other {# champs}}",
+          "adoptedToast": "{count, plural, one {# champ ajouté} other {# champs ajoutés}}",
+          "identityDocument": {
+            "name": "Pièce d'identité",
+            "description": "Le justificatif demandé à la remise du matériel.",
+            "fields": {
+              "id_document_type": {
+                "label": "Type de pièce",
+                "options": {
+                  "idCard": "Carte d'identité",
+                  "passport": "Passeport",
+                  "residencePermit": "Titre de séjour",
+                  "drivingLicense": "Permis de conduire",
+                  "other": "Autre"
+                }
+              },
+              "id_document_number": {
+                "label": "Numéro de la pièce"
+              },
+              "id_document_expiry": {
+                "label": "Date d'expiration"
+              }
+            }
+          },
+          "emergencyContact": {
+            "name": "Contact de secours",
+            "description": "La personne à prévenir en cas de problème pendant la location.",
+            "fields": {
+              "emergency_contact_name": {
+                "label": "Nom"
+              },
+              "emergency_contact_phone": {
+                "label": "Téléphone"
+              },
+              "emergency_contact_relation": {
+                "label": "Lien avec le client",
+                "options": {
+                  "partner": "Conjoint(e)",
+                  "parent": "Parent",
+                  "friend": "Ami(e)",
+                  "colleague": "Collègue",
+                  "other": "Autre"
+                }
+              }
+            }
+          },
+          "businessContacts": {
+            "name": "Clients professionnels",
+            "description": "Le contact comptabilité et la référence à rappeler sur vos documents.",
+            "fields": {
+              "accounting_contact_name": {
+                "label": "Contact comptabilité"
+              },
+              "accounting_email": {
+                "label": "E-mail comptabilité"
+              },
+              "purchase_order_reference": {
+                "label": "Référence de bon de commande"
+              }
+            }
+          },
+          "brazil": {
+            "name": "Brésil",
+            "description": "CPF ou CNPJ, avec vérification du numéro, et RG.",
+            "fields": {
+              "br_cpf_cnpj": {
+                "label": "CPF / CNPJ"
+              },
+              "br_rg": {
+                "label": "RG"
+              },
+              "br_rg_issuer": {
+                "label": "Organisme émetteur"
+              }
+            }
+          },
+          "spain": {
+            "name": "Espagne",
+            "description": "DNI ou NIE, avec vérification de la lettre de contrôle.",
+            "fields": {
+              "es_dni_nie": {
+                "label": "DNI / NIE"
+              }
+            }
+          },
+          "italy": {
+            "name": "Italie",
+            "description": "Codice fiscale, avec vérification du caractère de contrôle.",
+            "fields": {
+              "it_codice_fiscale": {
+                "label": "Codice fiscale"
+              }
+            }
+          },
+          "portugal": {
+            "name": "Portugal",
+            "description": "NIF, avec vérification du chiffre de contrôle.",
+            "fields": {
+              "pt_nif": {
+                "label": "NIF"
+              }
+            }
+          },
+          "vehicles": {
+            "name": "Véhicules et deux-roues",
+            "description": "Le permis de conduire, repris sur le contrat.",
+            "fields": {
+              "driving_license_number": {
+                "label": "Numéro de permis"
+              },
+              "driving_license_date": {
+                "label": "Date d'obtention"
+              },
+              "driving_license_categories": {
+                "label": "Catégories"
+              }
+            }
+          },
+          "ski": {
+            "name": "Ski et montagne",
+            "description": "Les mensurations pour préparer le matériel avant l'arrivée du client.",
+            "fields": {
+              "height_cm": {
+                "label": "Taille"
+              },
+              "weight_kg": {
+                "label": "Poids"
+              },
+              "shoe_size": {
+                "label": "Pointure"
+              },
+              "ski_level": {
+                "label": "Niveau",
+                "options": {
+                  "beginner": "Débutant",
+                  "intermediate": "Intermédiaire",
+                  "advanced": "Confirmé",
+                  "expert": "Expert"
+                }
+              }
+            }
+          },
+          "bikes": {
+            "name": "Vélos",
+            "description": "De quoi régler le vélo avant que le client n'arrive.",
+            "fields": {
+              "height_cm": {
+                "label": "Taille"
+              },
+              "bike_saddle_height": {
+                "label": "Hauteur de selle"
+              },
+              "bike_preferences": {
+                "label": "Préférences"
+              }
+            }
+          },
+          "boating": {
+            "name": "Nautisme",
+            "description": "Le permis bateau, repris sur le contrat.",
+            "fields": {
+              "boat_license_number": {
+                "label": "Numéro de permis bateau"
+              },
+              "boat_license_type": {
+                "label": "Type de permis",
+                "options": {
+                  "coastal": "Côtier",
+                  "offshore": "Hauturier",
+                  "inland": "Eaux intérieures",
+                  "none": "Sans permis"
+                }
+              }
+            }
+          },
+          "perItem": "Par article loué"
+        },
+        "deleteDialog": {
+          "title": "Supprimer « {label} » ?",
+          "description": "Le champ disparaîtra de toutes les fiches. Cette action est irréversible.",
+          "withValues": "{count, plural, one {# client a une valeur pour ce champ : elle sera effacée.} other {# clients ont une valeur pour ce champ : elles seront effacées.}}",
+          "confirm": "Supprimer définitivement",
+          "cancel": "Annuler",
+          "descriptionItem": "Le champ disparaîtra de toutes les réservations. Cette action est irréversible.",
+          "withItemValues": "{count, plural, one {# article loué a une valeur pour ce champ : elle sera effacée.} other {# articles loués ont une valeur pour ce champ : elles seront effacées.}}",
+          "hideInstead": "Masquer plutôt"
+        },
+        "preview": {
+          "client": {
+            "previewFor": "Aperçu pour",
+            "noProduct": "Aucun produit trouvé",
+            "sampleProduct": "Article loué",
+            "oneCardPerUnit": "Une carte par article loué : deux vélos, deux cartes.",
+            "emptyProduct": "Rien n’est demandé au client pour ce produit.",
+            "emptyAll": "Rien n’est demandé au client pour le moment.",
+            "emptyHint": "Réglez « Demander au client » sur Facultatif ou Obligatoire pour qu’un champ apparaisse ici."
+          }
+        },
+        "toasts": {
+          "created": "Champ ajouté",
+          "deleted": "Champ supprimé",
+          "hidden": "Champ masqué"
+        },
+        "online": {
+          "collect": "Demander au client",
+          "collectModes": {
+            "never": "Non",
+            "optional": "Facultatif",
+            "required": "Obligatoire"
+          },
+          "collectHelp": {
+            "never": "Non : visible uniquement par votre équipe.",
+            "customer": {
+              "optional": "Proposé au client lorsqu'il réserve en ligne.",
+              "required": "Le client doit le renseigner pour réserver en ligne."
+            },
+            "item": {
+              "optional": "Proposé pour chaque article loué, lors de la réservation en ligne.",
+              "required": "À renseigner pour chaque article loué avant de réserver en ligne."
+            }
+          },
+          "target": "Pour",
+          "targetModes": {
+            "all": "Toutes les réservations",
+            "products": "Selon les produits"
+          },
+          "targetHelp": {
+            "customer": {
+              "all": "Demandé à chaque réservation en ligne.",
+              "products": "Demandé seulement si le panier contient l'un de ces produits."
+            },
+            "item": {
+              "all": "Chaque article loué porte ce champ, quel que soit le produit.",
+              "products": "Seuls les articles de ces catégories et produits portent ce champ."
+            }
+          },
+          "targetsNone": "Aucun produit choisi : ce champ ne s'applique à aucune réservation.",
+          "targetsPlaceholder": "Catégorie ou produit…",
+          "targetsEmpty": "Aucun résultat",
+          "groups": {
+            "categories": "Catégories",
+            "products": "Produits"
+          },
+          "productCount": "{count, plural, =0 {Aucun produit} one {# produit} other {# produits}}",
+          "productStatus": {
+            "draft": "Brouillon",
+            "archived": "Archivé"
+          },
+          "customerEditable": "Modifiable par le client dans son espace",
+          "customerEditableHint": "Il le retrouve dans son compte client et peut le mettre à jour.",
+          "customerEditableNeverHint": "Disponible lorsque le champ est demandé au client."
+        },
+        "sectionOnline": {
+          "adoptedTitle": "Pour quels produits ?",
+          "adoptedDescription": "Les champs « {section} » sont enregistrés pour chaque article loué. Choisissez les produits concernés et, si besoin, demandez-les au client.",
+          "apply": "Appliquer",
+          "later": "Plus tard"
+        },
+        "builder": {
+          "templates": {
+            "all": "Voir tous les modèles"
+          },
+          "locked": {
+            "addressPlaceholder": "Rue, code postal, ville, pays",
+            "label": "Champ indispensable",
+            "sheetNote": "Champ indispensable : toujours présent sur la fiche. Seules sa place et sa largeur se règlent."
+          },
+          "field": {
+            "select": "Modifier « {label} »",
+            "actions": "Actions du champ « {label} »",
+            "draftBadge": "Nouveau",
+            "draftPlaceholder": "Nouveau champ"
+          },
+          "item": {
+            "empty": "Taille, pointure, niveau… Ajoutez ce qu'il faut savoir pour préparer chaque article."
+          },
+          "inspector": {
+            "newTitle": "Nouveau champ",
+            "add": "Ajouter",
+            "cancel": "Annuler",
+            "close": "Fermer",
+            "general": "Général",
+            "advanced": "Options avancées",
+            "saving": "Enregistrement…",
+            "saved": "Enregistré",
+            "format": "Format",
+            "formatHelp": "Louez vérifie le numéro saisi et le met en forme.",
+            "formatFreeHelp": "Tout texte est accepté.",
+            "formats": {
+              "free": "Libre",
+              "br_cpf_cnpj": "CPF / CNPJ (Brésil)",
+              "es_dni_nie": "DNI / NIE (Espagne)",
+              "it_codice_fiscale": "Codice fiscale (Italie)",
+              "pt_nif": "NIF (Portugal)"
+            }
+          },
+          "picker": {
+            "title": "Ajouter un champ",
+            "suggested": "Modèles suggérés",
+            "templates": "Modèles",
+            "examples": {
+              "customer": {
+                "text": "Numéro de permis",
+                "textarea": "Remarques sur le client",
+                "number": "Années de pratique",
+                "date": "Date d'expiration du permis",
+                "select": "Type de pièce d'identité",
+                "checkbox": "Décharge signée",
+                "phone": "Contact d'urgence",
+                "email": "E-mail de facturation",
+                "url": "Lien vers un justificatif"
+              },
+              "item": {
+                "text": "Numéro de casier",
+                "textarea": "Préférences de réglage",
+                "number": "Taille (cm)",
+                "date": "Date de naissance du cycliste",
+                "select": "Niveau : débutant, confirmé…",
+                "checkbox": "Siège enfant",
+                "phone": "Téléphone du participant",
+                "email": "E-mail du participant",
+                "url": "Lien vers le parcours"
+              }
+            }
+          },
+          "native": {
+            "fixed": "Champ Louez : son nom et son type sont fixes."
+          },
+          "visibility": {
+            "shown": {
+              "customer": "Afficher sur la fiche",
+              "item": "Afficher sur la réservation"
+            },
+            "shownHint": {
+              "customer": "Votre équipe le voit et le remplit sur chaque fiche client.",
+              "item": "Votre équipe le remplit pour chaque article loué."
+            },
+            "hiddenHint": {
+              "customer": "Masqué : il n'apparaît plus sur les fiches. Ses valeurs sont conservées.",
+              "item": "Masqué : il n'apparaît plus sur les réservations. Ses valeurs sont conservées."
+            }
+          },
+          "online": {
+            "hiddenNote": "Masqué : il n'est pas demandé au client. Affichez-le pour le proposer à la réservation."
+          },
+          "pageDescription": "Les champs de vos fiches clients, tels que vos formulaires les affichent.",
+          "preview": {
+            "open": "Aperçu client",
+            "description": "Ce que vos clients remplissent en réservant en ligne."
+          },
+          "layout": {
+            "title": "Mise en page"
+          },
+          "width": {
+            "label": "Largeur",
+            "full": "Pleine",
+            "half": "Demi",
+            "fullLabel": "Pleine largeur",
+            "halfLabel": "Demi-largeur",
+            "hint": "Deux champs en demi-largeur se partagent une ligne.",
+            "fixed": "Ce champ occupe toujours toute la ligne."
+          },
+          "record": {
+            "customer": "Sur la fiche",
+            "item": "Sur la réservation"
+          },
+          "toasts": {
+            "applied": "Réglages appliqués"
+          }
+        }
       }
     },
     "commandPalette": {
@@ -6081,6 +6885,7 @@
       "whatsNew": "Nouveautés",
       "settings": "Paramètres",
       "settingsAdmin": "Administration",
+      "settingsBilling": "Facturation",
       "settingsApi": "API",
       "settingsAppearance": "Apparence",
       "settingsDelivery": "Livraison",
@@ -6098,7 +6903,8 @@
       "settingsReviewBooster": "Booster d'avis",
       "settingsTaxes": "Taxes",
       "productsEdit": "Modifier",
-      "reservationsEdit": "Modifier"
+      "reservationsEdit": "Modifier",
+      "settingsCustomerFields": "Fiche client"
     },
     "notificationsCenter": {
       "title": "Notifications",
@@ -6190,6 +6996,10 @@
         "optional-password": {
           "title": "Un mot de passe, si vous le souhaitez",
           "description": "Ajoutez un mot de passe à votre compte pour vous connecter sans attendre le code reçu par e-mail. Le code, lui, reste toujours disponible."
+        },
+        "customer-custom-fields": {
+          "title": "Des fiches clients à votre image",
+          "description": "Ajoutez vos propres champs ou partez d'un modèle par pays et par activité : permis, pièce d'identité, mensurations, CPF…"
         }
       }
     },
@@ -6313,6 +7123,17 @@
       "sourceHint": "Parcourir le code source",
       "star": "Laisser une étoile",
       "later": "Plus tard"
+    },
+    "reservationDetails": {
+      "itemDetails": {
+        "title": "Détails de la location",
+        "incomplete": "À compléter",
+        "empty": "Rien de renseigné",
+        "sheetDescription": "Qui utilise chaque article et ce qu'il faut préparer.",
+        "participantName": "Pour qui ?",
+        "participantNamePlaceholder": "Prénom",
+        "saved": "Détails de la location enregistrés"
+      }
     }
   },
   "storefront": {
@@ -6842,7 +7663,8 @@
         "contact": "Coordonnées",
         "delivery": "Livraison",
         "address": "Adresse",
-        "confirm": "Confirmation"
+        "confirm": "Confirmation",
+        "details": "Détails de la location"
       },
       "deliveryDescription": "Choisissez comment recevoir et retourner votre équipement",
       "fulfillmentTitle": "Retrait et retour",
@@ -7057,6 +7879,13 @@
         "title": "Votre commande n'a pas pu être envoyée",
         "goToStep": "Corriger"
       },
+      "storePaused": {
+        "title": "Les réservations en ligne sont en pause",
+        "description": "Cette boutique ne prend pas de réservations en ligne pour le moment.",
+        "descriptionNamed": "{storeName} ne prend pas de réservations en ligne pour le moment.",
+        "contactHint": "Contactez-la directement pour réserver ces dates.",
+        "contactLater": "Réessayez un peu plus tard."
+      },
       "payAmount": "Payer {amount}",
       "blocked": {
         "resolving": "Vérification de la disponibilité…",
@@ -7105,6 +7934,10 @@
           "unavailable": "Le paiement en ligne est indisponible pour cette boutique.",
           "sessionFailed": "Le paiement n'a pas pu être relancé. Réessayez dans un instant."
         }
+      },
+      "customFields": {
+        "savedSummary": "Informations déjà renseignées",
+        "detailsIntro": "Ces informations aident {store} à préparer votre matériel."
       }
     },
     "confirmation": {
@@ -7153,6 +7986,8 @@
       "redirecting": "Redirection vers le paiement...",
       "securePayment": "Paiement sécurisé par Stripe",
       "backToStore": "Retour à la boutique",
+      "acceptContractRich": "J'ai lu et j'accepte les <terms>conditions générales de location</terms>",
+      "acceptContractRequired": "Acceptez les conditions générales de location pour continuer.",
       "errors": {
         "expiredTitle": "Lien expiré",
         "expiredDescription": "Ce lien de paiement a expiré. Veuillez contacter le loueur pour en obtenir un nouveau.",
@@ -7306,7 +8141,7 @@
       "signContract": "Signer le contrat",
       "contractSigned": "Contrat signé",
       "downloadContract": "Télécharger le contrat",
-      "signContractConfirmation": "En continuant, vous confirmez avoir lu et accepter ce contrat de location.",
+      "signContractConfirmation": "Vous acceptez le <contract>contrat de location</contract> et les conditions générales de location. La date et votre adresse IP sont enregistrées.",
       "signContractError": "Le contrat n’a pas pu être signé. Veuillez réessayer.",
       "invoiceDocuments": {
         "title": "Factures et avoirs",
@@ -7653,6 +8488,17 @@
         "paymentDescription": "Le magasin sera informé. Si vous avez déjà payé ou déposé une caution, contactez le magasin pour son remboursement ou sa libération. Cette action ne déclenche aucun remboursement automatique.",
         "adminSubject": "Demande #{number} annulée par le client",
         "adminBody": "{name} a annulé sa demande de réservation #{number} avant votre confirmation. Vous pouvez consulter son historique dans votre tableau de bord."
+      },
+      "customerFields": {
+        "title": "Informations complémentaires",
+        "description": "Demandées par {store} lors de vos réservations. À jour, elles vous évitent de les ressaisir."
+      },
+      "rentalDetails": {
+        "title": "Détails de la location",
+        "editableHint": "Modifiables jusqu’au début de la location.",
+        "toComplete": "À compléter",
+        "saved": "Détails enregistrés",
+        "saveError": "Impossible d’enregistrer les détails. Vérifiez les champs et réessayez."
       }
     },
     "marketplaceShell": {
@@ -7850,6 +8696,23 @@
       "breakdownTitle": "Détail par saison",
       "from": "À partir de",
       "averageRate": "En moyenne sur vos dates"
+    },
+    "customerFields": {
+      "optionalLabel": "{label} (facultatif)",
+      "sensitiveNote": "Visible uniquement par {store}, pour les besoins de votre réservation.",
+      "suspicious": "Ce numéro ne semble pas valide. Vérifiez-le ou continuez quand même.",
+      "participantLabel": "Pour qui ?",
+      "participantPlaceholder": "Prénom (facultatif)",
+      "unitCounter": "{index} / {count}",
+      "unitEmpty": "Rien de renseigné",
+      "recapValue": "{label} : {value}",
+      "profile": {
+        "title": "Profil",
+        "birthDate": "Date de naissance",
+        "acquisitionSource": "Comment nous avez-vous connus ?",
+        "acquisitionSourceDetail": "Précisez",
+        "socialLinks": "Réseaux et liens"
+      }
     }
   },
   "onboarding": {
@@ -8087,6 +8950,7 @@
           "quietMonth": "Un mois sans location : rien à payer.",
           "subscription": "Un abonnement mensuel si vous louez beaucoup.",
           "switch": "On change de formule quand on veut.",
+          "details": "Une fois votre boutique créée, le détail de votre offre se trouve dans ses paramètres de facturation.",
           "individualNote": "Vos revenus de location sont à déclarer selon votre situation ; si l'activité devient professionnelle, nous vous demanderons de changer de statut."
         }
       }
@@ -8199,10 +9063,10 @@
       "customerText": "Je reconnais avoir pris connaissance des conditions générales de location et les accepte sans réserve.",
       "dateLabel": "Date :",
       "ipLabel": "IP :",
-      "automatic": "Validé automatiquement",
-      "automaticText": "Contrat validé automatiquement lors de la confirmation ou du paiement de la réservation.",
       "atBooking": "Signé à la réservation",
       "atBookingText": "Conditions générales de location acceptées lors de la réservation en ligne, ce qui vaut signature du présent contrat.",
+      "inStore": "Signé sur place",
+      "signerLabel": "Signataire :",
       "signedOnLabel": "Signé le :",
       "validatedOnLabel": "Validé le :"
     },
@@ -8323,7 +9187,10 @@
     }
   },
   "errors": {
+    "storeNotAcceptingReservations": "Cette boutique ne prend pas de réservations en ligne pour le moment. {hasContact, select, yes {Contactez-la : {contact}} other {Contactez-la directement.}}",
     "generic": "Une erreur est survenue",
+    "contractNotSignable": "Ce contrat ne peut plus être signé.",
+    "contractSignatureRequired": "Cette boutique exige que le client signe son contrat avant le retrait.",
     "pageLoadError": "Nous n'avons pas pu charger cette page. Veuillez réessayer.",
     "notFound": "Page introuvable",
     "notFoundDescription": "La page que vous recherchez n'existe pas ou a été déplacée.",
@@ -8339,6 +9206,10 @@
     "integrationCategoryNotFound": "Catégorie d'intégration introuvable",
     "integrationNotConnected": "Intégration non connectée",
     "unsupportedOperation": "Opération non prise en charge",
+    "planPaymentFailed": "Votre carte a été refusée : la différence n’a pas pu être prélevée. Votre plan n’a pas changé. Mettez à jour votre carte depuis « Voir mes factures », puis réessayez.",
+    "planPaymentConfirmationRequired": "Votre banque demande de confirmer le paiement de la différence, ce qui n’est pas possible depuis cette page. Votre plan n’a pas changé. Ajoutez une autre carte depuis « Voir mes factures », puis réessayez, ou contactez le support.",
+    "planNoPaymentMethod": "Aucune carte n’est enregistrée : la différence n’a pas pu être prélevée. Votre plan n’a pas changé. Ajoutez une carte depuis « Voir mes factures », puis réessayez.",
+    "planChangeNoLongerPending": "Ce changement de plan n’est plus en attente : il a déjà commencé, ou il a été abandonné. La page affiche maintenant votre plan actuel.",
     "permissionDenied": "Permission insuffisante",
     "customerNotFound": "Client introuvable",
     "reservationNotFound": "Réservation introuvable",
@@ -8510,7 +9381,22 @@
     "requestCancellationPaymentChanged": "Les informations de paiement ont changé. Vérifiez-les avant de confirmer à nouveau l’annulation.",
     "promoCodeProductsAlreadyDiscounted": "Ce code ne s’applique pas aux produits déjà en promotion.",
     "paymentAmountTooSmall": "Le paiement par carte exige un minimum de {minimumAmount, number} {currency}. Modifiez votre panier ou contactez la boutique.",
-    "checkoutPaymentFailed": "Le paiement n’a pas pu démarrer. Votre réservation n’a pas été confirmée. Réessayez ou contactez la boutique."
+    "checkoutPaymentFailed": "Le paiement n’a pas pu démarrer. Votre réservation n’a pas été confirmée. Réessayez ou contactez la boutique.",
+    "customFieldsInvalid": "Certains champs complémentaires sont invalides.",
+    "optionsRequired": "Ajoutez au moins un choix.",
+    "customerFields": {
+      "tooManyFields": "Vous avez atteint le nombre maximum de champs actifs. Archivez-en un pour en ajouter un autre.",
+      "tooManySearchable": "Cinq champs au maximum peuvent être inclus dans la recherche.",
+      "tooManyListFields": "Deux champs au maximum peuvent être affichés dans la liste."
+    },
+    "customFieldRequired": "Veuillez renseigner « {field} ».",
+    "customFieldInvalid": "« {field} » n'est pas valide.",
+    "itemDetailRequired": "Veuillez renseigner « {field} » pour {product} (n° {unit}).",
+    "itemDetailInvalid": "« {field} » n'est pas valide pour {product} (n° {unit}).",
+    "reservationDetailsLocked": "Ces informations ne sont plus modifiables : la location a commencé ou est terminée.",
+    "customerNotAuthenticated": "Connectez-vous à votre espace client pour continuer.",
+    "profileFieldRequired": "Veuillez renseigner « {field} ».",
+    "profileFieldInvalid": "« {field} » n'est pas valide."
   },
   "welcome": {
     "greeting": "Bienvenue sur Louez.io",

@@ -1,5 +1,11 @@
 import { composeConfirmationPreview } from "@/lib/document-previews/compose-confirmation-preview";
-import { DeleteAccountEmail, getDeleteAccountEmailSubject } from "@louez/email/templates";
+import {
+  DeleteAccountEmail,
+  getDeleteAccountEmailSubject,
+  getOtpEmailSubject,
+  getPasswordChangedEmailSubject,
+  PasswordChangedEmail,
+} from "@louez/email/templates";
 
 import {
   composeContractEmail,
@@ -12,6 +18,7 @@ import {
 } from "@/lib/email/compose";
 import { getEmailTranslations } from "@/lib/email/i18n";
 import {
+  BalanceLimitEmail,
   DepositAuthorizationRequestEmail,
   MagicLinkEmail,
   NewRequestLandlordEmail,
@@ -38,6 +45,7 @@ import {
   VoiceNumberBillingEmail,
   getReservationModifiedEmailSubject,
 } from "@/lib/email/templates";
+import type { BalanceLimitVariant } from "@/lib/email/templates/balance-limit";
 import type { VoiceNumberBillingVariant } from "@/lib/email/templates/voice-number-billing";
 
 import {
@@ -138,6 +146,32 @@ const voiceNumberBilling = (
         e164: "+33298112233",
         credits: 40,
         deadlineText: variant === "failed" ? "le 15 septembre 2026" : null,
+        ctaUrl: url,
+        locale,
+      }),
+    }),
+  });
+
+const balanceLimit = (
+  variant: BalanceLimitVariant,
+  title: string,
+  description: string,
+): EmailDocumentPreview =>
+  storeEmail({
+    id: `balance-limit-${variant}`,
+    title,
+    description,
+    compose: ({ store, locale }) => ({
+      subject: getEmailTranslations(locale).balanceLimit[variant].subject.replace(
+        "{storeName}",
+        store.name,
+      ),
+      element: BalanceLimitEmail({
+        variant,
+        storeName: store.name,
+        primaryColor: store.primaryColor,
+        balance: variant === "near" ? "12,34 €" : "23,45 €",
+        limit: "23,45 €",
         ctaUrl: url,
         locale,
       }),
@@ -594,6 +628,16 @@ export const EMAIL_DOCUMENT_PREVIEWS: readonly EmailDocumentPreview[] = [
     "Numéro vocal : numéro libéré",
     "Le numéro a été détaché de la boutique.",
   ),
+  balanceLimit(
+    "near",
+    "Facturation : solde impayé proche de la limite",
+    "Le solde impayé de la boutique approche de la limite fixée par Louez.",
+  ),
+  balanceLimit(
+    "reached",
+    "Facturation : limite du solde atteinte",
+    "Le solde impayé a atteint sa limite, les nouvelles réservations sont suspendues.",
+  ),
   storeEmail({
     id: "team-invitation",
     title: "Invitation d'équipe",
@@ -648,6 +692,25 @@ export const EMAIL_DOCUMENT_PREVIEWS: readonly EmailDocumentPreview[] = [
     compose: ({ locale }) => ({
       subject: null,
       element: MagicLinkEmail({ url, locale }),
+    }),
+  }),
+  platformEmail({
+    id: "otp-forget-password",
+    title: "Code de réinitialisation du mot de passe",
+    description: "Code à usage unique pour choisir un nouveau mot de passe.",
+    compose: ({ locale }) => ({
+      subject: `${getOtpEmailSubject(locale, "forget-password")}: 482913`,
+      element: OTPEmail({ otp: "482913", locale, purpose: "forget-password" }),
+    }),
+  }),
+  platformEmail({
+    id: "password-changed",
+    title: "Mot de passe ajouté, modifié ou retiré",
+    description:
+      "E-mail d'information envoyé à chaque changement de mot de passe, avec le lien « Ce n'était pas moi ».",
+    compose: ({ locale }) => ({
+      subject: getPasswordChangedEmailSubject(locale, "added"),
+      element: PasswordChangedEmail({ event: "added", url, locale }),
     }),
   }),
   platformEmail({

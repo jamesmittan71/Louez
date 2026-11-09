@@ -1,10 +1,9 @@
 import { tool } from "ai";
 import { and, desc, eq, exists, gte, inArray, like, lte, or, sql, sum } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import { z } from "zod";
 
 import {
-  ConsumableStockError,
-  canTransitionReservationStatus,
   categories,
   customers,
   dailyStats,
@@ -14,7 +13,6 @@ import {
   buildUnitRentableDuringPredicate,
   getBlockingReservationStatuses,
   marketplaceCatalogTombstones,
-  getAllowedReservationStatusTransitions,
   loadConsumableReservedQuantities,
   payments,
   productCategories,
@@ -23,14 +21,28 @@ import {
   products,
   reservationItems,
   reservations,
-  consumeReservationStock,
-  restoreReservationStock,
   stores,
   nextProductSlug,
   nextCategorySlug,
 } from "@louez/db";
 import type { ApiKeyPermissions } from "@louez/db/schema";
 import { computeReservedNetOfExcludedUnits, loadExcludedUnitInfo } from "@louez/api/services";
+import {
+  customerFieldSearchCondition,
+  getCustomerFieldValues,
+  listCustomerFieldDefinitions,
+  saveCustomerFieldValues,
+} from "@louez/api/services/customer-fields";
+import {
+  checkCustomerFieldEntries,
+  toReadableCustomerFields,
+} from "@louez/api/services/customer-tools";
+
+import {
+  deleteRecordedPayment,
+  insertRecordedPayment,
+} from "@/lib/reservations/dashboard-payment-writes";
+import { changeReservationStatusAsAgent } from "@/lib/reservations/status-change";
 
 // ---------------------------------------------------------------------------
 // Context & permissions
@@ -38,6 +50,8 @@ import { computeReservedNetOfExcludedUnits, loadExcludedUnitInfo } from "@louez/
 
 export type AIChatContext = {
   storeId: string;
+  /** The signed-in dashboard user the assistant acts for. */
+  userId: string;
   storeName: string;
   permissions: ApiKeyPermissions;
 };
@@ -56,11 +70,49 @@ function requirePermission(
   }
 }
 
+/** What the tools call into. Tests pass one with fake senders. */
+export interface AIToolServices {
+  /** A status change with everything the dashboard does around it. */
+  changeReservationStatus: typeof changeReservationStatusAsAgent;
+}
+
+const defaultServices: AIToolServices = {
+  changeReservationStatus: changeReservationStatusAsAgent,
+};
+// A list of pairs rather than a free-form object: some providers refuse a tool
+// parameter that declares no property.
+const customFieldEntriesSchema = z
+  .array(
+    z.object({
+      field: z
+        .string()
+        .describe("The custom field's label as shown on the customer record, or its key"),
+      value: z
+        .string()
+        .describe(
+          'The value. Checkboxes take "true" or "false", dates YYYY-MM-DD. An empty string clears the field.',
+        ),
+    }),
+  )
+  .optional()
+  .describe(
+    "Custom fields defined by the store (ID numbers, licence, sizes…). An unknown field name returns the list of available fields.",
+  );
+
 // ---------------------------------------------------------------------------
 // Tool factory
 // ---------------------------------------------------------------------------
 
-export function createAITools(ctx: AIChatContext) {
+export function createAITools(ctx: AIChatContext, services: AIToolServices = defaultServices) {
+  /** The settings a recorded payment's currency and insurance share are read with. */
+  const loadStoreSettings = async () => {
+    const store = await db.query.stores.findFirst({
+      where: eq(stores.id, ctx.storeId),
+      columns: { settings: true },
+    });
+    return store?.settings ?? null;
+  };
+
   return {
     // ── Products ──────────────────────────────────────────────────────────
 
@@ -382,7 +434,8 @@ export function createAITools(ctx: AIChatContext) {
     }),
 
     update_reservation_status: tool({
-      description: "Change the status of a reservation (confirm, reject, cancel, etc.)",
+      description:
+        "Change the status of a reservation: confirm, reject, cancel, mark as picked up (ongoing) or returned (completed). Like the dashboard, it also emails the customer when a request is confirmed or rejected, notifies the store, and, when the store uses insurance, creates the contract on a confirmation and cancels it on a cancellation.",
       inputSchema: z.object({
         reservationId: z.string().describe("The reservation ID"),
         status: z
@@ -392,81 +445,26 @@ export function createAITools(ctx: AIChatContext) {
       execute: async ({ reservationId, status: newStatus }) => {
         requirePermission(ctx, "reservations", "write");
 
-        const existing = await db.query.reservations.findFirst({
-          where: and(eq(reservations.storeId, ctx.storeId), eq(reservations.id, reservationId)),
-          columns: { id: true, number: true, status: true },
+        // As on the dashboard: the stock check, the fees, the insurance contract,
+        // the emails and the notifications.
+        const result = await services.changeReservationStatus({
+          storeId: ctx.storeId,
+          reservationId,
+          to: newStatus,
+          actor: "ai_chat",
+          actorUserId: ctx.userId,
         });
-        if (!existing) return { error: "Reservation not found" };
-
-        const allowed = getAllowedReservationStatusTransitions(existing.status);
-        if (!canTransitionReservationStatus(existing.status, newStatus)) {
-          return {
-            error: `Invalid transition: ${existing.status} → ${newStatus}. Allowed: ${allowed?.join(", ") ?? "none"}`,
-          };
+        if (!result.ok) {
+          return { error: result.error === "not_found" ? "Reservation not found" : result.message };
         }
 
-        const updateData: Record<string, unknown> = { status: newStatus };
-        if (newStatus === "ongoing") updateData.pickedUpAt = new Date();
-        if (newStatus === "completed") updateData.returnedAt = new Date();
-
-        let transitionFrom = existing.status;
-        try {
-          const transitionResult = await db.transaction(async (tx) => {
-            const [lockedReservation] = await tx
-              .select({ status: reservations.status })
-              .from(reservations)
-              .where(and(eq(reservations.id, reservationId), eq(reservations.storeId, ctx.storeId)))
-              .for("update");
-
-            if (!lockedReservation) {
-              return { ok: false as const, error: "Reservation not found" };
-            }
-
-            const lockedAllowed = getAllowedReservationStatusTransitions(lockedReservation.status);
-            if (!canTransitionReservationStatus(lockedReservation.status, newStatus)) {
-              return {
-                ok: false as const,
-                error: `Invalid transition: ${lockedReservation.status} → ${newStatus}. Allowed: ${lockedAllowed?.join(", ") ?? "none"}`,
-              };
-            }
-
-            if (
-              newStatus === "confirmed" &&
-              (lockedReservation.status === "pending" || lockedReservation.status === "quote")
-            ) {
-              await consumeReservationStock(tx, reservationId, ctx.storeId);
-            } else if (
-              (newStatus === "cancelled" || newStatus === "rejected") &&
-              (lockedReservation.status === "confirmed" || lockedReservation.status === "ongoing")
-            ) {
-              await restoreReservationStock(tx, reservationId, ctx.storeId);
-            }
-
-            await tx
-              .update(reservations)
-              .set(updateData)
-              .where(
-                and(eq(reservations.id, reservationId), eq(reservations.storeId, ctx.storeId)),
-              );
-
-            return { ok: true as const, previousStatus: lockedReservation.status };
-          });
-
-          if (!transitionResult.ok) {
-            return { error: transitionResult.error };
-          }
-          transitionFrom = transitionResult.previousStatus;
-        } catch (error) {
-          if (error instanceof ConsumableStockError) {
-            return { error: error.message };
-          }
-          throw error;
-        }
         return {
           success: true,
-          number: existing.number,
-          from: transitionFrom,
-          to: newStatus,
+          number: result.number,
+          from: result.from,
+          to: result.to,
+          // What the dashboard shows after the change: rule warnings, a failed contract.
+          ...(result.warnings.length > 0 && { warnings: result.warnings }),
         };
       },
     }),
@@ -521,7 +519,12 @@ export function createAITools(ctx: AIChatContext) {
     list_customers: tool({
       description: "List customers with optional search, type filter, and date filter",
       inputSchema: z.object({
-        search: z.string().optional().describe("Search by name or email"),
+        search: z
+          .string()
+          .optional()
+          .describe(
+            "Search by name, email, or the start of a searchable custom field (an ID or licence number)",
+          ),
         type: z.enum(["individual", "business"]).optional(),
         since: z
           .string()
@@ -555,9 +558,9 @@ export function createAITools(ctx: AIChatContext) {
         if (since) conditions.push(gte(customers.createdAt, new Date(since)));
         if (search) {
           const s = `%${search.toLowerCase()}%`;
-          conditions.push(
-            sql`(LOWER(${customers.firstName}) LIKE ${s} OR LOWER(${customers.lastName}) LIKE ${s} OR LOWER(${customers.email}) LIKE ${s})`,
-          );
+          const nativeMatch = sql`(LOWER(${customers.firstName}) LIKE ${s} OR LOWER(${customers.lastName}) LIKE ${s} OR LOWER(${customers.email}) LIKE ${s})`;
+          const customMatch = customerFieldSearchCondition(ctx.storeId, search);
+          conditions.push(customMatch ? sql`(${nativeMatch} OR ${customMatch})` : nativeMatch);
         }
 
         const rows = await db
@@ -586,7 +589,8 @@ export function createAITools(ctx: AIChatContext) {
     }),
 
     get_customer: tool({
-      description: "Get detailed customer profile with reservation history",
+      description:
+        "Get detailed customer profile with reservation history and the store's custom fields. Custom fields the store flagged as sensitive are never returned: their labels come back in `withheldSensitiveFields`, which means the value exists on the record and can be read by the merchant in the dashboard, not that it is missing.",
       inputSchema: z.object({
         customerId: z.string().describe("The customer ID"),
       }),
@@ -604,7 +608,14 @@ export function createAITools(ctx: AIChatContext) {
         });
 
         if (!customer) return { error: "Customer not found" };
-        return { customer };
+
+        const [definitions, values] = await Promise.all([
+          listCustomerFieldDefinitions(ctx.storeId, { activeOnly: true, scope: "customer" }),
+          getCustomerFieldValues(ctx.storeId, customer.id),
+        ]);
+        const { fields, withheld } = toReadableCustomerFields(definitions, values);
+
+        return { customer, customFields: fields, withheldSensitiveFields: withheld };
       },
     }),
 
@@ -617,8 +628,17 @@ export function createAITools(ctx: AIChatContext) {
         phone: z.string().optional(),
         customerType: z.enum(["individual", "business"]).optional(),
         companyName: z.string().optional(),
+        customFields: customFieldEntriesSchema,
       }),
-      execute: async ({ email, firstName, lastName, phone, customerType, companyName }) => {
+      execute: async ({
+        email,
+        firstName,
+        lastName,
+        phone,
+        customerType,
+        companyName,
+        customFields,
+      }) => {
         requirePermission(ctx, "customers", "write");
 
         const existing = await db.query.customers.findFirst({
@@ -627,20 +647,43 @@ export function createAITools(ctx: AIChatContext) {
         });
         if (existing) return { error: "A customer with this email already exists" };
 
-        const [created] = await db
-          .insert(customers)
-          .values({
-            storeId: ctx.storeId,
-            email,
-            firstName,
-            lastName,
-            phone: phone ?? null,
-            customerType: customerType ?? "individual",
-            companyName: companyName ?? null,
-          })
-          .$returningId();
+        const definitions = await listCustomerFieldDefinitions(ctx.storeId, {
+          activeOnly: true,
+          scope: "customer",
+        });
+        const checked = checkCustomerFieldEntries({
+          definitions,
+          entries: customFields,
+          customerType: customerType ?? "individual",
+          partial: false,
+        });
+        if (!checked.ok) return { error: checked.error };
 
-        return { id: created.id, firstName, lastName, email };
+        const createdId = await db.transaction(async (tx) => {
+          const [created] = await tx
+            .insert(customers)
+            .values({
+              storeId: ctx.storeId,
+              email,
+              firstName,
+              lastName,
+              phone: phone ?? null,
+              customerType: customerType ?? "individual",
+              companyName: companyName ?? null,
+              createdVia: "ai",
+            })
+            .$returningId();
+
+          await saveCustomerFieldValues(tx, {
+            storeId: ctx.storeId,
+            customerId: created.id,
+            values: checked.values,
+            definitions,
+          });
+          return created.id;
+        });
+
+        return { id: createdId, firstName, lastName, email };
       },
     }),
 
@@ -656,13 +699,14 @@ export function createAITools(ctx: AIChatContext) {
         city: z.string().optional(),
         postalCode: z.string().optional(),
         notes: z.string().optional(),
+        customFields: customFieldEntriesSchema,
       }),
-      execute: async ({ customerId, ...updates }) => {
+      execute: async ({ customerId, customFields, ...updates }) => {
         requirePermission(ctx, "customers", "write");
 
         const existing = await db.query.customers.findFirst({
           where: and(eq(customers.storeId, ctx.storeId), eq(customers.id, customerId)),
-          columns: { id: true, email: true },
+          columns: { id: true, email: true, customerType: true },
         });
         if (!existing) return { error: "Customer not found" };
 
@@ -679,11 +723,37 @@ export function createAITools(ctx: AIChatContext) {
           if (value !== undefined) updateData[key] = value;
         }
 
-        if (Object.keys(updateData).length === 0) {
+        const hasCustomFields = (customFields?.length ?? 0) > 0;
+        if (Object.keys(updateData).length === 0 && !hasCustomFields) {
           return { error: "No fields to update" };
         }
 
-        await db.update(customers).set(updateData).where(eq(customers.id, customerId));
+        const definitions = await listCustomerFieldDefinitions(ctx.storeId, {
+          activeOnly: true,
+          scope: "customer",
+        });
+        const checked = checkCustomerFieldEntries({
+          definitions,
+          entries: customFields,
+          customerType: existing.customerType,
+          partial: true,
+        });
+        if (!checked.ok) return { error: checked.error };
+
+        await db.transaction(async (tx) => {
+          if (Object.keys(updateData).length > 0) {
+            await tx
+              .update(customers)
+              .set(updateData)
+              .where(and(eq(customers.id, customerId), eq(customers.storeId, ctx.storeId)));
+          }
+          await saveCustomerFieldValues(tx, {
+            storeId: ctx.storeId,
+            customerId,
+            values: checked.values,
+            definitions,
+          });
+        });
         return { success: true, customerId };
       },
     }),
@@ -742,15 +812,22 @@ export function createAITools(ctx: AIChatContext) {
           };
         }
 
-        await db.insert(payments).values({
-          reservationId,
-          type,
-          amount,
-          method,
-          status: "completed",
-          paidAt: new Date(),
-          notes: notes ?? null,
-        });
+        // The dashboard's writer: billing facts, currency and the reservation's mark.
+        const storeSettings = await loadStoreSettings();
+        await db.transaction((tx) =>
+          insertRecordedPayment(tx, {
+            id: nanoid(),
+            reservationId,
+            storeId: ctx.storeId,
+            storeSettings,
+            amount,
+            type,
+            method,
+            origin: "manual",
+            paidAt: new Date(),
+            notes: notes ?? null,
+          }),
+        );
 
         return {
           success: true,
@@ -785,7 +862,11 @@ export function createAITools(ctx: AIChatContext) {
           };
         }
 
-        await db.delete(payments).where(eq(payments.id, paymentId));
+        await deleteRecordedPayment(db, {
+          paymentId,
+          reservationId: payment.reservationId,
+          storeId: ctx.storeId,
+        });
         return {
           success: true,
           reservationNumber: payment.reservation?.number,
@@ -830,15 +911,21 @@ export function createAITools(ctx: AIChatContext) {
           };
         }
 
-        await db.insert(payments).values({
-          reservationId,
-          type: "deposit_return",
-          amount,
-          method,
-          status: "completed",
-          paidAt: new Date(),
-          notes: notes ?? null,
-        });
+        const storeSettings = await loadStoreSettings();
+        await db.transaction((tx) =>
+          insertRecordedPayment(tx, {
+            id: nanoid(),
+            reservationId,
+            storeId: ctx.storeId,
+            storeSettings,
+            amount,
+            type: "deposit_return",
+            method,
+            origin: "deposit",
+            paidAt: new Date(),
+            notes: notes ?? null,
+          }),
+        );
 
         return {
           success: true,

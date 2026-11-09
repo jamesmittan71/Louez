@@ -14,11 +14,11 @@ import { DashboardIconTile } from "@/components/dashboard/shared/dashboard-icon-
 import { OnboardingStepHeader } from "../_components/step-header";
 import { useStripeStep } from "./use-stripe-step";
 
-export function OnboardingStripeClientPage({ nextPath }: { nextPath: string }) {
+export function OnboardingStripeClientPage() {
   const router = useRouter();
   const t = useTranslations("onboarding.stripe");
   const tCommon = useTranslations("common");
-  const { form, reservationMode, isPending } = useStripeStep({ nextPath });
+  const { form, reservationMode, isPending, isNavigating } = useStripeStep();
 
   return (
     <>
@@ -82,7 +82,9 @@ export function OnboardingStripeClientPage({ nextPath }: { nextPath: string }) {
             >
               {tCommon("back")}
             </Button>
-            <form.SubscribeButton className="flex-1">{tCommon("confirm")}</form.SubscribeButton>
+            <form.SubscribeButton className="flex-1" isPending={isNavigating}>
+              {tCommon("confirm")}
+            </form.SubscribeButton>
           </div>
         </form.Form>
       </form.AppForm>

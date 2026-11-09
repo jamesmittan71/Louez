@@ -51,11 +51,14 @@ export const DashboardListRow = ({
       <ChevronRight className="text-muted-foreground/60 group-hover:text-muted-foreground size-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
     </>
   );
-  return onSelect ? (
-    <button type="button" onClick={onSelect} className={cn(rowClassName, "w-full text-left")}>
-      {content}
-    </button>
-  ) : (
+  if (onSelect) {
+    return (
+      <button type="button" onClick={onSelect} className={cn(rowClassName, "w-full text-left")}>
+        {content}
+      </button>
+    );
+  }
+  return (
     <Link href={href} className={rowClassName}>
       {content}
     </Link>

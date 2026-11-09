@@ -30,7 +30,13 @@ Linux kernel and many other projects.
    ```bash
    pnpm check          # oxlint + duplicate audit + type-check across the monorepo
    pnpm format:check   # formatting
+   pnpm test           # every node:test suite
    ```
+
+   Tests that need a database skip themselves unless their URL variable is set.
+   Most use `TEST_DATABASE_URL`, a MySQL server URL on which each suite creates
+   and drops its own database (`@louez/db/testing`). CI runs them against a
+   throwaway MySQL (see `.github/workflows/ci.yml`).
 
 3. **Follow the review checklist** in
    [docs/code-review/07-checklist.md](docs/code-review/07-checklist.md). It is the

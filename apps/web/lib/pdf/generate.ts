@@ -1,16 +1,24 @@
 import { validateReservationContract } from "@louez/api/services";
+import {
+  getCustomerFieldValues,
+  listCustomerFieldDefinitions,
+} from "@louez/api/services/customer-fields";
+import { listReservationItemDetails } from "@louez/api/services/customer-fields-online";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { ContractDocument, SupportedLocale } from "./contract";
 import { db } from "@louez/db";
-import { documents, reservations, stores } from "@louez/db";
+import { documents, reservationContractSignatures, reservations, stores } from "@louez/db";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { convertImageForPdf } from "./image-utils";
+import { getContractCustomerFieldLines } from "./util.contract-customer-fields";
+import { getContractItemDetailLines } from "./util.contract-item-details";
 import { getReservationInsuredProductIds } from "@/lib/reservations/get-insured-product-ids";
 import { getLogoForLightBackground, presentCommercialLine, resolveReservationBilling } from "@louez/utils";
 
 import { getContractTranslations } from "./contract-i18n";
 import { isLocale } from "@/lib/i18n/format-locale";
+import { formatStoreDate } from "@/lib/utils/store-date";
 
 interface GenerateContractOptions {
   reservationId: string;
@@ -31,6 +39,10 @@ export async function generateContract({
   regenerate = false,
   locale: requestedLocale,
 }: GenerateContractOptions) {
+  // The stored contract is dated from this read, not from the end of the render: a signature
+  // recorded while it renders is newer, so the next download renders it again.
+  const readAt = new Date();
+
   // Get reservation with all relations including payments and assigned units
   const reservation = await db.query.reservations.findFirst({
     where: eq(reservations.id, reservationId),
@@ -42,7 +54,6 @@ export async function generateContract({
       },
       customer: true,
       payments: true,
-      activity: { columns: { metadata: true } },
     },
   });
 
@@ -54,7 +65,7 @@ export async function generateContract({
     requestedLocale ??
     (reservation.locale && isLocale(reservation.locale) ? reservation.locale : "fr");
 
-  const automaticallyValidatedAt = !reservation.signedAt
+  const automaticallyValidatedAt = !reservation.contractValidatedAt
     ? await db.transaction((tx) =>
         validateReservationContract(
           tx,
@@ -72,29 +83,28 @@ export async function generateContract({
       )
     : null;
   if (automaticallyValidatedAt) {
-    reservation.signedAt = automaticallyValidatedAt;
-    reservation.signatureIp = null;
-  }
-  if (!reservation.signedAt) {
+    reservation.contractValidatedAt = automaticallyValidatedAt;
+  } else if (!reservation.contractValidatedAt) {
+    // Another request may have validated it in the meantime.
     const current = await db.query.reservations.findFirst({
       where: and(
         eq(reservations.id, reservation.id),
         eq(reservations.storeId, reservation.storeId),
       ),
-      columns: { signedAt: true, signatureIp: true },
-      with: { activity: { columns: { metadata: true } } },
+      columns: { contractValidatedAt: true },
     });
     if (current) {
-      reservation.signedAt = current.signedAt;
-      reservation.signatureIp = current.signatureIp;
-      reservation.activity = current.activity;
+      reservation.contractValidatedAt = current.contractValidatedAt;
     }
   }
-  const automaticContractValidation =
-    Boolean(automaticallyValidatedAt) ||
-    reservation.activity.some(
-      (activity) => activity.metadata?.kind === "automatic_contract_validation",
-    );
+
+  const drawnSignature =
+    reservation.signatureMethod === "in_store"
+      ? ((await db.query.reservationContractSignatures.findFirst({
+          where: eq(reservationContractSignatures.reservationId, reservation.id),
+          columns: { signerName: true, image: true },
+        })) ?? null)
+      : null;
 
   // Get store
   const store = await db.query.stores.findFirst({
@@ -136,7 +146,7 @@ export async function generateContract({
   const pdfLogoUrl = await convertImageForPdf(getLogoForLightBackground(store));
 
   const shouldIncludeFullCgv = store.includeCgvInContract;
-  const isSignedContract = Boolean(reservation.signedAt);
+  const isFinalContract = Boolean(reservation.signedAt || reservation.contractValidatedAt);
   const storeCgvRaw = store.cgv ?? "";
   const storeCgv = toNonEmptyString(storeCgvRaw);
   const hasExistingCgvSnapshot =
@@ -148,12 +158,12 @@ export async function generateContract({
   let fullCgvHtml: string | null = null;
   let cgvSnapshotToPersist: string | undefined = undefined;
 
-  // Signed contracts with existing snapshots must remain stable regardless of current store setting.
-  if (isSignedContract && (shouldIncludeFullCgv || hasExistingCgvSnapshot)) {
+  // Validated or signed contracts keep their snapshot whatever the current store setting.
+  if (isFinalContract && (shouldIncludeFullCgv || hasExistingCgvSnapshot)) {
     const resolvedSnapshotRaw = hasExistingCgvSnapshot ? existingCgvSnapshotRaw : storeCgvRaw;
     fullCgvHtml = toNonEmptyString(resolvedSnapshotRaw);
 
-    // Legacy signed contracts can be backfilled on first regeneration.
+    // Older final contracts get their snapshot on their first regeneration.
     if (!hasExistingCgvSnapshot) {
       cgvSnapshotToPersist = resolvedSnapshotRaw;
     }
@@ -162,6 +172,38 @@ export async function generateContract({
   }
 
   const insuredProductIds = await getReservationInsuredProductIds(reservation);
+
+  // Read at generation time: the stored PDF keeps these values even if the
+  // customer record, the rented units' details or the field definitions
+  // change afterwards.
+  const [customerFieldDefinitions, customerFieldValues, itemDetails] = await Promise.all([
+    listCustomerFieldDefinitions(reservation.storeId, { activeOnly: true, scope: "customer" }),
+    getCustomerFieldValues(reservation.storeId, reservation.customer.id),
+    listReservationItemDetails({
+      storeId: reservation.storeId,
+      reservationId: reservation.id,
+      audience: "team",
+    }),
+  ]);
+  // A calendar day has no timezone: noon UTC never slips to the day before.
+  const formatFieldDate = (isoDate: string) =>
+    formatStoreDate(new Date(`${isoDate}T12:00:00Z`), "UTC", "MEDIUM_DATE", locale);
+  // Stored as "80.5": the contract reads "80,5" in French.
+  const numberFormat = new Intl.NumberFormat(locale);
+  const formatFieldNumber = (value: number) => numberFormat.format(value);
+  const customFieldLines = getContractCustomerFieldLines(
+    customerFieldDefinitions,
+    customerFieldValues,
+    {
+      customerType: reservation.customer.customerType,
+      formatDate: formatFieldDate,
+      formatNumber: formatFieldNumber,
+    },
+  );
+  const itemDetailLines = getContractItemDetailLines(itemDetails, {
+    formatDate: formatFieldDate,
+    formatNumber: formatFieldNumber,
+  });
 
   // Generate PDF buffer
   const pdfBuffer = await renderToBuffer(
@@ -178,13 +220,15 @@ export async function generateContract({
         taxAmount: reservation.taxAmount,
         taxRate: reservation.taxRate,
         signedAt: reservation.signedAt,
-        automaticContractValidation,
-        signedAtBooking: reservation.source === "online",
+        contractValidatedAt: reservation.contractValidatedAt,
+        signatureMethod: reservation.signatureMethod,
         signatureIp: reservation.signatureIp,
+        drawnSignature,
         createdAt: reservation.createdAt,
         customer: {
           ...reservation.customer,
           ...resolveReservationBilling(reservation, reservation.customer),
+          customFieldLines,
         },
         outboundMethod: reservation.outboundMethod,
         returnMethod: reservation.returnMethod,
@@ -222,6 +266,7 @@ export async function generateContract({
             assignedUnitIdentifiers:
               item.assignedUnits?.map((au) => au.identifierSnapshot).filter(Boolean) || [],
             insured: item.productId !== null && insuredProductIds.has(item.productId),
+            detailLines: itemDetailLines.get(item.id) ?? [],
           };
         }),
         payments: reservation.payments.map((payment) => ({
@@ -260,15 +305,17 @@ export async function generateContract({
   const fileName =
     locale === "fr" ? `contrat-${reservation.number}.pdf` : `contract-${reservation.number}.pdf`;
 
-  // If regenerating, update existing document
-  if (existingContract && regenerate) {
+  // A reservation has one contract: a stale or regenerated one is updated in place.
+  if (existingContract) {
     const updateData: {
       fileUrl: string;
       fileName: string;
+      generatedAt: Date;
       cgvSnapshot?: string | null;
     } = {
       fileUrl: `data:application/pdf;base64,${base64Content}`,
       fileName,
+      generatedAt: readAt,
     };
 
     if (cgvSnapshotToPersist !== undefined) {
@@ -291,7 +338,8 @@ export async function generateContract({
     number: documentNumber,
     fileName,
     fileUrl: `data:application/pdf;base64,${base64Content}`,
-    cgvSnapshot: isSignedContract && shouldIncludeFullCgv ? storeCgvRaw : null,
+    cgvSnapshot: isFinalContract && shouldIncludeFullCgv ? storeCgvRaw : null,
+    generatedAt: readAt,
   });
 
   return await db.query.documents.findFirst({

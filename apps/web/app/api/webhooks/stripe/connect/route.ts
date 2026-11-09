@@ -2,42 +2,36 @@ import { completeExtensionPayment } from "@/lib/reservations/extension-service";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type Stripe from "stripe";
 
 import { failMarketplaceBookingAttempt } from "@louez/api/services";
-import { db } from "@louez/db";
+import { type Transaction, db, markReservationIds, markStore, toWholeSeconds } from "@louez/db";
 import { payments, reservationActivity, reservations, stores } from "@louez/db";
 import type { NotificationSettings, StoreSettings } from "@louez/types";
 
+import { runReservationEffects } from "@/lib/billing/reservation-effects";
 import { notifyPaymentFailed, notifyStripeConnected } from "@/lib/discord/platform-notifications";
 import { log } from "@/lib/evlog";
-import {
-  tryEnsureRefundPaymentRecord,
-  tryGenerateCreditNoteForRefund,
-  tryGenerateInvoiceForPayment,
-} from "@/lib/invoicing/service";
+import { tryGenerateInvoiceForPayment } from "@/lib/invoicing/service";
 import { dispatchNotification } from "@/lib/notifications/dispatcher";
 import {
-  distributeReversal,
-  getReversibleFees,
   getStoreBilling,
   parseFeeMetadata,
   recordMarketplaceFee,
-  recordFeeReversals,
   recordReservationFee,
 } from "@/lib/pay-as-you-go";
-import { getReferralProgramConfig } from "@/lib/referral/defaults";
-import {
-  clawbackReferrerRewardForQualifyingPayment,
-  maybeGrantReferrerReward,
-} from "@/lib/referral/rewards";
+import { maybeGrantReferrerReward } from "@/lib/referral/rewards";
 import { fromStripeCents } from "@/lib/stripe";
 import { stripe } from "@/lib/stripe/client";
+import { cancelAbandonedCheckout } from "@/lib/reservations/cancel-abandoned-checkout";
 import { completeCheckoutPayment } from "@/lib/reservations/complete-checkout-payment";
 
 import { env } from "@/env";
+
+import { handleChargeDispute } from "./charge-dispute";
+import { handleChargeRefunded } from "./charge-refund";
 
 // ===== TYPE DEFINITIONS =====
 // Define explicit type for reservation with relations to ensure proper typing
@@ -88,6 +82,10 @@ type ReservationWithRelations = {
 
 const describeError = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
+
+/** The id of a Stripe reference, expanded or not. */
+const stripeRefId = (value: string | { id: string } | null | undefined): string | null =>
+  typeof value === "string" ? value : (value?.id ?? null);
 
 // ===== VALIDATION HELPERS =====
 // Validates Stripe metadata to prevent manipulation attacks
@@ -210,12 +208,22 @@ export async function POST(request: Request) {
 
       // Refund events
       case "charge.refunded":
-        await handleChargeRefunded(event.data.object as Stripe.Charge, connectedAccountId);
+        await handleChargeRefunded(event.data.object, connectedAccountId);
         break;
 
-      // Dispute / chargeback — the funds are pulled back, so reverse the platform fees.
+      // Dispute / chargeback. Stripe only sends the events enabled on the Connect
+      // webhook endpoint: all five must be on for the billing facts.
       case "charge.dispute.created":
-        await handleChargeDisputeCreated(event.data.object as Stripe.Dispute);
+      case "charge.dispute.updated":
+      case "charge.dispute.closed":
+      case "charge.dispute.funds_withdrawn":
+      case "charge.dispute.funds_reinstated":
+        await handleChargeDispute({
+          eventType: event.type,
+          dispute: event.data.object,
+          eventCreatedAt: new Date(event.created * 1000),
+          connectedAccountId,
+        });
         break;
 
       // Account events
@@ -337,6 +345,9 @@ async function handleCheckoutCompleted(
   // Get payment intent details and extract customer/payment method
   let paymentIntentId: string | null = null;
   let chargeId: string | null = null;
+  // Stripe's time of the charge: a payment's paidAt, so its month is the charge's.
+  let chargeCreatedAt: Date | null = null;
+  let paymentIntentMetadata: Record<string, string> | null = null;
   let stripeCustomerId: string | null = null;
   let stripePaymentMethodId: string | null = null;
   // Platform fee skimmed from this charge (cents), its id, and the breakdown carried
@@ -362,10 +373,12 @@ async function handleCheckoutCompleted(
       stripePaymentMethodId = paymentIntent.payment_method as string | null;
       applicationFeeCollectedCents = paymentIntent.application_fee_amount ?? 0;
       feeBreakdown = parseFeeMetadata(paymentIntent.metadata);
+      paymentIntentMetadata = paymentIntent.metadata;
 
       const latestCharge = paymentIntent.latest_charge;
       if (latestCharge && typeof latestCharge === "object") {
         chargeId = latestCharge.id;
+        chargeCreatedAt = new Date(latestCharge.created * 1000);
         applicationFeeId = (latestCharge.application_fee as string | null) ?? null;
       } else {
         chargeId = (latestCharge as string | null) ?? null;
@@ -514,8 +527,12 @@ async function handleCheckoutCompleted(
       currency,
       paymentIntentId,
       chargeId,
+      chargeCreatedAt,
       stripeCustomerId,
       stripePaymentMethodId,
+      stripeAccountId: connectedAccountId ?? null,
+      paymentIntentMetadata,
+      sessionMetadata: session.metadata,
     },
     paymentRequestId: session.metadata?.paymentRequestId ?? null,
     analytics: {
@@ -558,36 +575,43 @@ async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
   // row before expiring the session, so those never reach the cancellation.
   const abandoned = existingPayment?.status === "pending";
 
-  if (existingPayment && existingPayment.status === "pending") {
-    await db
-      .update(payments)
-      .set({
-        status: "cancelled",
-        updatedAt: new Date(),
-      })
-      .where(eq(payments.id, existingPayment.id));
-  }
+  await db.transaction(async (tx) => {
+    if (existingPayment && existingPayment.status === "pending") {
+      await tx
+        .update(payments)
+        .set({
+          status: "cancelled",
+          updatedAt: new Date(),
+        })
+        .where(eq(payments.id, existingPayment.id));
+      await markReservationIds(tx, [existingPayment.reservationId]);
+    }
 
-  // Log payment expired activity
-  await db.insert(reservationActivity).values({
-    id: nanoid(),
-    reservationId,
-    activityType: "payment_expired",
-    description: null,
-    metadata: {
-      checkoutSessionId: session.id,
-      amount,
-      currency,
-      method: "stripe",
-    },
-    createdAt: new Date(),
+    // Log payment expired activity
+    await tx.insert(reservationActivity).values({
+      id: nanoid(),
+      reservationId,
+      activityType: "payment_expired",
+      description: null,
+      metadata: {
+        checkoutSessionId: session.id,
+        amount,
+        currency,
+        method: "stripe",
+      },
+      // Whole seconds, as the status change below stores its `cancelled` row.
+      createdAt: toWholeSeconds(new Date()),
+    });
   });
 
-  await failMarketplaceBookingAttempt(reservationId);
+  await failMarketplaceBookingAttempt(reservationId, runReservationEffects);
 
   const reservationCancelled =
     abandoned && session.metadata?.checkoutFlow === "storefront_checkout"
-      ? await cancelAbandonedCheckout(reservationId, session.id)
+      ? await cancelAbandonedCheckout(
+          { reservationId, checkoutSessionId: session.id },
+          runReservationEffects,
+        )
       : false;
 
   log.info({
@@ -600,64 +624,23 @@ async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
   });
 }
 
-/**
- * A storefront checkout whose only payment window closed without a payment
- * is not a booking: the pending reservation is cancelled so it stops holding
- * stock and the owner does not keep a "payment in progress" that never ends.
- * Anything already confirmed, paid, or paid through another open session is
- * left alone.
- */
-async function cancelAbandonedCheckout(
-  reservationId: string,
-  checkoutSessionId: string,
-): Promise<boolean> {
-  const reservation = await db.query.reservations.findFirst({
-    columns: { id: true, status: true, source: true },
-    where: eq(reservations.id, reservationId),
-    with: { payments: { columns: { type: true, status: true } } },
-  });
-  if (!reservation || reservation.status !== "pending" || reservation.source !== "online") {
-    return false;
-  }
-  const hasRentalPayment = reservation.payments.some(
-    (payment) =>
-      payment.type === "rental" && (payment.status === "completed" || payment.status === "pending"),
-  );
-  if (hasRentalPayment) return false;
-
-  const now = new Date();
-  return db.transaction(async (tx) => {
-    const [locked] = await tx
-      .select({ status: reservations.status })
-      .from(reservations)
-      .where(eq(reservations.id, reservationId))
-      .for("update");
-    if (locked?.status !== "pending") return false;
-
-    await tx
-      .update(reservations)
-      .set({ status: "cancelled", updatedAt: now })
-      .where(and(eq(reservations.id, reservationId), eq(reservations.status, "pending")));
-
-    await tx.insert(reservationActivity).values({
-      id: nanoid(),
-      reservationId,
-      activityType: "cancelled",
-      description: null,
-      metadata: {
-        previousStatus: "pending",
-        reason: "payment_expired",
-        checkoutSessionId,
-      },
-      createdAt: now,
-    });
-    return true;
-  });
-}
-
 // ============================================================================
 // Deposit Authorization Hold Event Handlers
 // ============================================================================
+
+/**
+ * Locks the reservation, first in a deposit event's transaction: rows are locked
+ * reservation first, then its payments, as the dashboard's deposit writes do.
+ * Stripe sends these events for the dashboard's own capture or release, so both
+ * run at once for the same PaymentIntent, and the opposite order deadlocks.
+ */
+async function lockDepositReservation(tx: Transaction, reservationId: string) {
+  await tx
+    .select({ id: reservations.id })
+    .from(reservations)
+    .where(eq(reservations.id, reservationId))
+    .for("update");
+}
 
 /**
  * Handles successful deposit authorization (empreinte created)
@@ -685,7 +668,7 @@ async function handleDepositAuthorized(
   }
 
   // SECURITY: Validate connected account matches store
-  const { valid } = await validateConnectedAccountForReservation(
+  const { valid, reservation } = await validateConnectedAccountForReservation(
     reservationId,
     connectedAccountId,
     "deposit_authorized",
@@ -711,50 +694,62 @@ async function handleDepositAuthorized(
 
   const currency = paymentIntent.currency.toUpperCase();
   const amount = fromStripeCents(paymentIntent.amount, currency);
+  const paymentMethodId = stripeRefId(paymentIntent.payment_method);
 
   // Authorization expires after 7 days
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7);
 
-  // Create payment record for the authorization hold
-  await db.insert(payments).values({
-    id: nanoid(),
-    reservationId,
-    amount: amount.toFixed(2),
-    type: "deposit_hold",
-    method: "stripe",
-    status: "authorized",
-    stripePaymentIntentId: paymentIntent.id,
-    stripePaymentMethodId: paymentIntent.payment_method as string | null,
-    authorizationExpiresAt: expiresAt,
-    currency,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
+  await db.transaction(async (tx) => {
+    await lockDepositReservation(tx, reservationId);
 
-  // Update reservation deposit status
-  await db
-    .update(reservations)
-    .set({
-      depositStatus: "authorized",
-      depositPaymentIntentId: paymentIntent.id,
-      depositAuthorizationExpiresAt: expiresAt,
-      stripePaymentMethodId: paymentIntent.payment_method as string | null,
+    // Create payment record for the authorization hold. A hold is not paid and
+    // carries no charge id: its capture row does (deposit_capture).
+    await tx.insert(payments).values({
+      id: nanoid(),
+      reservationId,
+      amount: amount.toFixed(2),
+      type: "deposit_hold",
+      method: "stripe",
+      status: "authorized",
+      stripePaymentIntentId: paymentIntent.id,
+      stripePaymentMethodId: paymentMethodId,
+      grossMinor: paymentIntent.amount,
+      insuranceShareMinor: 0,
+      origin: "deposit",
+      stripeAccountId: connectedAccountId ?? reservation?.store.stripeAccountId ?? null,
+      authorizationExpiresAt: expiresAt,
+      currency,
+      createdAt: new Date(),
       updatedAt: new Date(),
-    })
-    .where(eq(reservations.id, reservationId));
+    });
 
-  // Log activity
-  await db.insert(reservationActivity).values({
-    id: nanoid(),
-    reservationId,
-    activityType: "deposit_authorized",
-    metadata: {
-      paymentIntentId: paymentIntent.id,
-      amount,
-      expiresAt: expiresAt.toISOString(),
-    },
-    createdAt: new Date(),
+    // Update reservation deposit status
+    await tx
+      .update(reservations)
+      .set({
+        depositStatus: "authorized",
+        depositPaymentIntentId: paymentIntent.id,
+        depositAuthorizationExpiresAt: expiresAt,
+        stripePaymentMethodId: paymentMethodId,
+        updatedAt: new Date(),
+      })
+      .where(eq(reservations.id, reservationId));
+
+    // Log activity
+    await tx.insert(reservationActivity).values({
+      id: nanoid(),
+      reservationId,
+      activityType: "deposit_authorized",
+      metadata: {
+        paymentIntentId: paymentIntent.id,
+        amount,
+        expiresAt: expiresAt.toISOString(),
+      },
+      createdAt: new Date(),
+    });
+
+    await markReservationIds(tx, [reservationId]);
   });
 
   log.info({
@@ -795,43 +790,48 @@ async function handleDepositReleased(
   );
   if (!valid) return;
 
-  // Find and update the deposit hold payment
-  const depositPayment = await db.query.payments.findFirst({
-    where: eq(payments.stripePaymentIntentId, paymentIntent.id),
-  });
-
-  if (depositPayment) {
-    await db
-      .update(payments)
-      .set({
-        status: "cancelled",
-        updatedAt: new Date(),
-      })
-      .where(eq(payments.id, depositPayment.id));
-  }
-
-  // Update reservation deposit status
-  await db
-    .update(reservations)
-    .set({
-      depositStatus: "released",
-      updatedAt: new Date(),
-    })
-    .where(eq(reservations.id, reservationId));
-
   const currency = paymentIntent.currency.toUpperCase();
   const amount = fromStripeCents(paymentIntent.amount, currency);
 
-  // Log activity
-  await db.insert(reservationActivity).values({
-    id: nanoid(),
-    reservationId,
-    activityType: "deposit_released",
-    metadata: {
-      paymentIntentId: paymentIntent.id,
-      amount,
-    },
-    createdAt: new Date(),
+  await db.transaction(async (tx) => {
+    await lockDepositReservation(tx, reservationId);
+
+    // Find and update the deposit hold payment
+    const depositPayment = await tx.query.payments.findFirst({
+      where: eq(payments.stripePaymentIntentId, paymentIntent.id),
+    });
+
+    if (depositPayment) {
+      await tx
+        .update(payments)
+        .set({
+          status: "cancelled",
+          updatedAt: new Date(),
+        })
+        .where(eq(payments.id, depositPayment.id));
+      await markReservationIds(tx, [depositPayment.reservationId]);
+    }
+
+    // Update reservation deposit status
+    await tx
+      .update(reservations)
+      .set({
+        depositStatus: "released",
+        updatedAt: new Date(),
+      })
+      .where(eq(reservations.id, reservationId));
+
+    // Log activity
+    await tx.insert(reservationActivity).values({
+      id: nanoid(),
+      reservationId,
+      activityType: "deposit_released",
+      metadata: {
+        paymentIntentId: paymentIntent.id,
+        amount,
+      },
+      createdAt: new Date(),
+    });
   });
 
   log.info({
@@ -861,7 +861,7 @@ async function handleDepositCaptured(
   }
 
   // SECURITY: Validate connected account matches store
-  const { valid } = await validateConnectedAccountForReservation(
+  const { valid, reservation } = await validateConnectedAccountForReservation(
     reservationId,
     connectedAccountId,
     "deposit_captured",
@@ -871,77 +871,106 @@ async function handleDepositCaptured(
   const currency = paymentIntent.currency.toUpperCase();
   const capturedAmount = fromStripeCents(paymentIntent.amount_received, currency);
   const originalAmount = fromStripeCents(paymentIntent.amount, currency);
+  const stripeAccountId = connectedAccountId ?? reservation?.store.stripeAccountId ?? null;
+  // A capture is paid when captured: the charge itself dates from the authorization.
+  const paidAt = new Date();
 
-  // Find and update the deposit hold payment
-  const depositPayment = await db.query.payments.findFirst({
-    where: eq(payments.stripePaymentIntentId, paymentIntent.id),
-  });
+  const capturePaymentId = await db.transaction(async (tx) => {
+    // Locked before the first read below, so that read sees a capture the
+    // dashboard committed while this event waited.
+    await lockDepositReservation(tx, reservationId);
 
-  if (depositPayment) {
-    await db
-      .update(payments)
-      .set({
-        status: "completed",
-        capturedAmount: capturedAmount.toFixed(2),
-        paidAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(payments.id, depositPayment.id));
-  }
-
-  // Create a deposit_capture payment record. Guard against duplicates: the dashboard
-  // capture action inserts this row synchronously, and Stripe may re-deliver
-  // payment_intent.succeeded — only insert when no deposit_capture row exists yet for
-  // this PaymentIntent.
-  if (capturedAmount > 0) {
-    const existingCapture = await db.query.payments.findFirst({
+    // Find and update the deposit hold payment. The capture row shares its
+    // PaymentIntent, so match the type.
+    const depositPayment = await tx.query.payments.findFirst({
       where: and(
         eq(payments.stripePaymentIntentId, paymentIntent.id),
-        eq(payments.type, "deposit_capture"),
+        eq(payments.type, "deposit_hold"),
       ),
     });
-    const capturePaymentId = existingCapture?.id ?? nanoid();
-    if (!existingCapture) {
-      await db.insert(payments).values({
-        id: capturePaymentId,
-        reservationId,
-        amount: capturedAmount.toFixed(2),
-        type: "deposit_capture",
-        method: "stripe",
-        status: "completed",
-        stripePaymentIntentId: paymentIntent.id,
-        stripeChargeId: paymentIntent.latest_charge as string | null,
-        currency,
-        paidAt: new Date(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+
+    if (depositPayment) {
+      await tx
+        .update(payments)
+        .set({
+          status: "completed",
+          capturedAmount: capturedAmount.toFixed(2),
+          paidAt,
+          // Holds recorded before the billing facts existed get them now.
+          grossMinor: sql`COALESCE(${payments.grossMinor}, ${paymentIntent.amount})`,
+          insuranceShareMinor: sql`COALESCE(${payments.insuranceShareMinor}, 0)`,
+          origin: sql`COALESCE(${payments.origin}, 'deposit')`,
+          stripeAccountId: sql`COALESCE(${payments.stripeAccountId}, ${stripeAccountId})`,
+          updatedAt: new Date(),
+        })
+        .where(eq(payments.id, depositPayment.id));
     }
+
+    // Create a deposit_capture payment record. Guard against duplicates: the dashboard
+    // capture action inserts this row synchronously, and Stripe may re-deliver
+    // payment_intent.succeeded — only insert when no deposit_capture row exists yet for
+    // this PaymentIntent.
+    let captureId: string | null = null;
+    if (capturedAmount > 0) {
+      const existingCapture = await tx.query.payments.findFirst({
+        where: and(
+          eq(payments.stripePaymentIntentId, paymentIntent.id),
+          eq(payments.type, "deposit_capture"),
+        ),
+      });
+      captureId = existingCapture?.id ?? nanoid();
+      if (!existingCapture) {
+        await tx.insert(payments).values({
+          id: captureId,
+          reservationId,
+          amount: capturedAmount.toFixed(2),
+          type: "deposit_capture",
+          method: "stripe",
+          status: "completed",
+          stripePaymentIntentId: paymentIntent.id,
+          stripeChargeId: stripeRefId(paymentIntent.latest_charge),
+          grossMinor: paymentIntent.amount_received,
+          insuranceShareMinor: 0,
+          origin: "deposit",
+          stripeAccountId,
+          currency,
+          paidAt,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
+    }
+
+    // Update reservation deposit status
+    await tx
+      .update(reservations)
+      .set({
+        depositStatus: "captured",
+        updatedAt: new Date(),
+      })
+      .where(eq(reservations.id, reservationId));
+
+    // Log activity
+    await tx.insert(reservationActivity).values({
+      id: nanoid(),
+      reservationId,
+      activityType: "deposit_captured",
+      metadata: {
+        paymentIntentId: paymentIntent.id,
+        capturedAmount,
+        originalAmount,
+        reason: paymentIntent.metadata?.captureReason || null,
+      },
+      createdAt: new Date(),
+    });
+
+    await markReservationIds(tx, [reservationId]);
+    return captureId;
+  });
+
+  if (capturePaymentId) {
     await tryGenerateInvoiceForPayment(capturePaymentId, "stripe_deposit_captured_webhook");
   }
-
-  // Update reservation deposit status
-  await db
-    .update(reservations)
-    .set({
-      depositStatus: "captured",
-      updatedAt: new Date(),
-    })
-    .where(eq(reservations.id, reservationId));
-
-  // Log activity
-  await db.insert(reservationActivity).values({
-    id: nanoid(),
-    reservationId,
-    activityType: "deposit_captured",
-    metadata: {
-      paymentIntentId: paymentIntent.id,
-      capturedAmount,
-      originalAmount,
-      reason: paymentIntent.metadata?.captureReason || null,
-    },
-    createdAt: new Date(),
-  });
 
   log.info({
     stripeWebhook: {
@@ -988,28 +1017,31 @@ async function handleDepositFailed(
   const isDepositHold = paymentIntent.metadata?.type === "deposit_hold";
 
   if (isDepositHold) {
-    // Handle deposit authorization failure
-    await db
-      .update(reservations)
-      .set({
-        depositStatus: "failed",
-        updatedAt: new Date(),
-      })
-      .where(eq(reservations.id, reservationId));
+    // Handle deposit authorization failure. No payment changes, so no billing mark:
+    // the deposit status is not part of the reservation snapshot.
+    await db.transaction(async (tx) => {
+      await tx
+        .update(reservations)
+        .set({
+          depositStatus: "failed",
+          updatedAt: new Date(),
+        })
+        .where(eq(reservations.id, reservationId));
 
-    // Log deposit failed activity
-    await db.insert(reservationActivity).values({
-      id: nanoid(),
-      reservationId,
-      activityType: "deposit_failed",
-      metadata: {
-        paymentIntentId: paymentIntent.id,
-        amount,
-        error: errorMessage,
-        errorCode,
-        declineCode,
-      },
-      createdAt: new Date(),
+      // Log deposit failed activity
+      await tx.insert(reservationActivity).values({
+        id: nanoid(),
+        reservationId,
+        activityType: "deposit_failed",
+        metadata: {
+          paymentIntentId: paymentIntent.id,
+          amount,
+          error: errorMessage,
+          errorCode,
+          declineCode,
+        },
+        createdAt: new Date(),
+      });
     });
 
     log.info({
@@ -1042,35 +1074,38 @@ async function handleDepositFailed(
       return;
     }
 
-    if (existingPayment && existingPayment.status !== "failed") {
-      await db
-        .update(payments)
-        .set({
-          status: "failed",
-          updatedAt: new Date(),
-        })
-        .where(eq(payments.id, existingPayment.id));
-    }
+    await db.transaction(async (tx) => {
+      if (existingPayment && existingPayment.status !== "failed") {
+        await tx
+          .update(payments)
+          .set({
+            status: "failed",
+            updatedAt: new Date(),
+          })
+          .where(eq(payments.id, existingPayment.id));
+        await markReservationIds(tx, [existingPayment.reservationId]);
+      }
 
-    // Log payment failed activity
-    await db.insert(reservationActivity).values({
-      id: nanoid(),
-      reservationId,
-      activityType: "payment_failed",
-      metadata: {
-        paymentIntentId: paymentIntent.id,
-        amount,
-        currency,
-        method: "stripe",
-        error: errorMessage,
-        errorCode,
-        declineCode,
-      },
-      createdAt: new Date(),
+      // Log payment failed activity
+      await tx.insert(reservationActivity).values({
+        id: nanoid(),
+        reservationId,
+        activityType: "payment_failed",
+        metadata: {
+          paymentIntentId: paymentIntent.id,
+          amount,
+          currency,
+          method: "stripe",
+          error: errorMessage,
+          errorCode,
+          declineCode,
+        },
+        createdAt: new Date(),
+      });
     });
 
     if (reservation.source === "marketplace") {
-      await failMarketplaceBookingAttempt(reservationId);
+      await failMarketplaceBookingAttempt(reservationId, runReservationEffects);
     }
 
     log.info({
@@ -1138,177 +1173,6 @@ async function handleDepositFailed(
   }
 }
 
-async function handleChargeRefunded(charge: Stripe.Charge, connectedAccountId?: string) {
-  // Find payment by charge ID
-  const payment = await db.query.payments.findFirst({
-    where: and(eq(payments.stripeChargeId, charge.id), isNull(payments.stripeRefundId)),
-  });
-
-  if (!payment) {
-    log.info({
-      stripeWebhook: { event: "charge.refunded", issue: "payment_not_found", chargeId: charge.id },
-    });
-    return;
-  }
-
-  const { valid } = await validateConnectedAccountForReservation(
-    payment.reservationId,
-    connectedAccountId,
-    "charge_refunded",
-  );
-  if (!valid) return;
-
-  const currency = charge.currency.toUpperCase();
-  const refundAmount = fromStripeCents(charge.amount_refunded, currency);
-  const netAmount = fromStripeCents(Math.max(0, charge.amount - charge.amount_refunded), currency);
-  const isFullRefund = charge.refunded;
-
-  // Keep analytics net of cumulative partial refunds; full refunds are excluded by status.
-  await db
-    .update(payments)
-    .set({
-      amount: netAmount.toFixed(2),
-      status: isFullRefund ? "refunded" : "completed",
-      updatedAt: new Date(),
-    })
-    .where(eq(payments.id, payment.id));
-
-  const rentalRefunds = payment.type === "rental" ? (charge.refunds?.data ?? []) : [];
-  for (const refund of rentalRefunds) {
-    const individualRefundAmount = fromStripeCents(refund.amount, currency);
-    const refundPaymentId = await tryEnsureRefundPaymentRecord(
-      {
-        originalPaymentId: payment.id,
-        stripeRefundId: refund.id,
-        amount: individualRefundAmount,
-        currency,
-        type: "rental",
-        paidAt: new Date(refund.created * 1000),
-      },
-      "stripe_charge_refunded_webhook",
-    );
-    if (!refundPaymentId) continue;
-    await tryGenerateCreditNoteForRefund(
-      { originalPaymentId: payment.id, refundPaymentId },
-      individualRefundAmount,
-      "stripe_charge_refunded_webhook",
-    );
-  }
-
-  // Reverse the platform fees collected on this payment, in proportion to how much of
-  // the charge was refunded (full refund → reverse everything; partial → pro-rata).
-  // Both fee components share one Stripe application fee, so we refund the incremental
-  // amount once, then record the reversal. The Stripe refund must succeed BEFORE the
-  // rows are updated; a thrown error propagates so Stripe retries (idempotency-keyed,
-  // and re-delivery is a no-op because the already-reversed amount catches up).
-  if (payment.stripePaymentIntentId) {
-    await reversePlatformFees({
-      paymentIntentId: payment.stripePaymentIntentId,
-      refundRatio:
-        isFullRefund || charge.amount <= 0
-          ? 1
-          : Math.min(1, charge.amount_refunded / charge.amount),
-      idempotencyScope: charge.id,
-    });
-  }
-
-  const netAmountCents = Math.max(0, charge.amount - charge.amount_refunded);
-  const minQualifyingAmountCents = getReferralProgramConfig().minQualifyingAmountCents;
-  const shouldClawbackReferralReward =
-    isFullRefund || (minQualifyingAmountCents > 0 && netAmountCents < minQualifyingAmountCents);
-
-  // Referral Program: a fully refunded qualifying payment, or a partial refund that
-  // drops the net online payment below the qualifying minimum, claws back the Referrer
-  // Reward (within the clawback window). Best-effort; never block refund processing.
-  if (shouldClawbackReferralReward) {
-    await clawbackReferrerRewardForQualifyingPayment({
-      stripeChargeId: charge.id,
-      stripePaymentIntentId: payment.stripePaymentIntentId,
-    }).catch((error) => {
-      log.error({
-        referral: {
-          event: "reward_clawback_failed",
-          trigger: "refund",
-          chargeId: charge.id,
-          error: describeError(error),
-        },
-      });
-    });
-  }
-
-  // Log activity
-  await db.insert(reservationActivity).values({
-    id: nanoid(),
-    reservationId: payment.reservationId,
-    activityType: "payment_updated",
-    metadata: {
-      chargeId: charge.id,
-      refundAmount,
-      isFullRefund,
-    },
-    createdAt: new Date(),
-  });
-
-  log.info({
-    stripeWebhook: {
-      event: "charge.refunded",
-      paymentId: payment.id,
-      chargeId: charge.id,
-      refundAmount,
-      isFullRefund,
-    },
-  });
-}
-
-/**
- * Reverse platform fees for a payment by a given ratio (1 = full). Refunds the
- * incremental application-fee amount at Stripe, then records the reversal on the ledger
- * rows. Idempotent: re-delivery recomputes the increment as 0 once the ledger has caught
- * up, and the Stripe call is idempotency-keyed by `idempotencyScope` + target amount.
- */
-async function reversePlatformFees({
-  paymentIntentId,
-  refundRatio,
-  idempotencyScope,
-}: {
-  paymentIntentId: string;
-  refundRatio: number;
-  idempotencyScope: string;
-}): Promise<void> {
-  const { stripeApplicationFeeId, rows } = await getReversibleFees(paymentIntentId);
-  if (rows.length === 0) return;
-
-  const totalFeeCents = rows.reduce((sum, r) => sum + r.amountCents, 0);
-  const alreadyReversedCents = rows.reduce((sum, r) => sum + r.amountReversedCents, 0);
-  const targetReversedCents = Math.round(totalFeeCents * refundRatio);
-  const incrementCents = Math.max(0, targetReversedCents - alreadyReversedCents);
-  if (incrementCents <= 0) return;
-
-  if (stripeApplicationFeeId) {
-    try {
-      await stripe.applicationFees.createRefund(
-        stripeApplicationFeeId,
-        { amount: incrementCents },
-        {
-          idempotencyKey: `platform_fee_reverse_${idempotencyScope}_${targetReversedCents}`,
-        },
-      );
-    } catch (error) {
-      // The application fee was already (fully) refunded out-of-band — treat as success
-      // and reconcile the ledger. Any other error propagates so Stripe retries.
-      const message = error instanceof Error ? error.message.toLowerCase() : "";
-      const alreadyRefunded =
-        message.includes("already") ||
-        message.includes("no refundable") ||
-        message.includes("greater than") ||
-        message.includes("exceeds");
-      if (!alreadyRefunded) throw error;
-    }
-  }
-
-  await recordFeeReversals(distributeReversal(rows, incrementCents));
-}
-
 async function handleAccountUpdated(account: Stripe.Account) {
   // Find store by connected account ID
   const store = await db.query.stores.findFirst({
@@ -1326,14 +1190,17 @@ async function handleAccountUpdated(account: Stripe.Account) {
   const chargesEnabled = account.charges_enabled ?? false;
   const detailsSubmitted = account.details_submitted ?? false;
 
-  await db
-    .update(stores)
-    .set({
-      stripeChargesEnabled: chargesEnabled,
-      stripeOnboardingComplete: chargesEnabled && detailsSubmitted,
-      updatedAt: new Date(),
-    })
-    .where(eq(stores.id, store.id));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(stores)
+      .set({
+        stripeChargesEnabled: chargesEnabled,
+        stripeOnboardingComplete: chargesEnabled && detailsSubmitted,
+        updatedAt: new Date(),
+      })
+      .where(eq(stores.id, store.id));
+    await markStore(tx, store.id);
+  });
 
   // Platform admin notification (only on first successful onboarding)
   if (chargesEnabled && detailsSubmitted && !store.stripeOnboardingComplete) {
@@ -1351,53 +1218,6 @@ async function handleAccountUpdated(account: Stripe.Account) {
       chargesEnabled,
       detailsSubmitted,
     },
-  });
-}
-
-/**
- * A customer disputed/charged back a rental payment. The disputed funds (and, for a
- * lost dispute, the application fee) are pulled from the connected account, so reverse
- * the platform fees collected on that payment. Treated as a full reversal; if the store
- * later WINS the dispute, the fee can be re-collected manually (rare).
- */
-async function handleChargeDisputeCreated(dispute: Stripe.Dispute) {
-  const paymentIntentId =
-    typeof dispute.payment_intent === "string"
-      ? dispute.payment_intent
-      : (dispute.payment_intent?.id ?? null);
-  if (!paymentIntentId) {
-    log.info({
-      stripeWebhook: {
-        event: "charge.dispute.created",
-        issue: "missing_payment_intent",
-        disputeId: dispute.id,
-      },
-    });
-    return;
-  }
-  await reversePlatformFees({
-    paymentIntentId,
-    refundRatio: 1,
-    idempotencyScope: `dispute_${dispute.id}`,
-  });
-
-  // Referral Program: a disputed qualifying payment claws back the Referrer Reward
-  // (within the clawback window). Best-effort; never block dispute processing.
-  await clawbackReferrerRewardForQualifyingPayment({
-    stripePaymentIntentId: paymentIntentId,
-  }).catch((error) => {
-    log.error({
-      referral: {
-        event: "reward_clawback_failed",
-        trigger: "dispute",
-        disputeId: dispute.id,
-        error: describeError(error),
-      },
-    });
-  });
-
-  log.info({
-    stripeWebhook: { event: "charge.dispute.created", disputeId: dispute.id, paymentIntentId },
   });
 }
 
@@ -1426,14 +1246,17 @@ async function handleAccountDeauthorized(connectedAccountId?: string) {
     });
     return;
   }
-  await db
-    .update(stores)
-    .set({
-      stripeChargesEnabled: false,
-      stripeOnboardingComplete: false,
-      updatedAt: new Date(),
-    })
-    .where(eq(stores.id, store.id));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(stores)
+      .set({
+        stripeChargesEnabled: false,
+        stripeOnboardingComplete: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(stores.id, store.id));
+    await markStore(tx, store.id);
+  });
   log.warn({
     stripeWebhook: {
       event: "account.application.deauthorized",

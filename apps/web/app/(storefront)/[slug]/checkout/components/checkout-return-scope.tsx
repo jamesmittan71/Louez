@@ -14,6 +14,8 @@ interface CheckoutReturnScopeProps {
   onScopeChange: (scope: ReturnScope) => void;
   isAddressDeliveryEnabled: boolean;
   isAddressDeliveryAvailable: boolean;
+  /** False for a delivery-only store, which takes nothing back at a location. */
+  isLocationReturnAvailable: boolean;
   /** Price shown on the address option, e.g. a per-km rate or "Free". */
   deliveryPrice: string;
   isDeliveryFree: boolean;
@@ -34,6 +36,7 @@ export const CheckoutReturnScope = ({
   onScopeChange,
   isAddressDeliveryEnabled,
   isAddressDeliveryAvailable,
+  isLocationReturnAvailable,
   deliveryPrice,
   isDeliveryFree,
   isPickupAtAddress,
@@ -59,13 +62,15 @@ export const CheckoutReturnScope = ({
           isFree={!isPickupAtAddress || isDeliveryFree}
           isSelected={scope === "same"}
         />
-        <CheckoutMethodOption
-          value="location"
-          label={t("returnAnotherLocation")}
-          price={t("free")}
-          isFree
-          isSelected={scope === "location"}
-        />
+        {isLocationReturnAvailable ? (
+          <CheckoutMethodOption
+            value="location"
+            label={t("returnAnotherLocation")}
+            price={t("free")}
+            isFree
+            isSelected={scope === "location"}
+          />
+        ) : null}
         {isAddressDeliveryEnabled ? (
           <CheckoutMethodOption
             value="address"

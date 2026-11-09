@@ -1,3 +1,4 @@
+import { isLiveVoice } from "@louez/voice/catalog";
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
@@ -6,7 +7,8 @@ import { env as dbEnv } from "@louez/db/env";
 import { env as emailEnv } from "@louez/email/env";
 import { env as validationsEnv } from "@louez/validations/env";
 
-import { payAsYouGoConfigSchema } from "@/lib/pay-as-you-go/config";
+import { louezBillingSchema } from "@/lib/billing/mode";
+import { louezHostedBySchema } from "@/lib/hosting";
 import {
   publicEnvSchema,
   readPublicEnvRuntimeValues,
@@ -69,10 +71,11 @@ export const env = createEnv({
       message: "S3_PUBLIC_URL must be an absolute URL or an absolute path",
     }),
 
-    // ===== Stripe (Optional — payments & subscriptions) =====
-    // Without Stripe the storefront degrades to request-mode reservations
-    // (isStripeConfigured / effective reservation mode) and subscription
-    // pages hide their checkout paths.
+    // ===== Stripe (Optional — online payments & platform billing) =====
+    // Online payments go through Stripe Connect, which needs STRIPE_SECRET_KEY and
+    // STRIPE_CONNECT_WEBHOOK_SECRET (isConnectConfigured); without them stores take
+    // request-mode reservations. STRIPE_WEBHOOK_SECRET and the price ids below serve
+    // platform billing only (LOUEZ_BILLING=cloud).
     STRIPE_SECRET_KEY: z.string().optional(),
     STRIPE_WEBHOOK_SECRET: z.string().optional(),
     STRIPE_CONNECT_WEBHOOK_SECRET: z.string().optional(),
@@ -215,7 +218,7 @@ export const env = createEnv({
     // The whole phone feature is INERT unless AI_PHONE_ENABLED === 'true' AND a
     // voice provider is configured. When off (default), no phone UI is shown and
     // the webhooks return 404. It reuses the AI agent + AI-credit layer, so it
-    // additionally requires AI_PROVIDER/AI_API_KEY (and, for billing,
+    // uses an OpenAI-enabled worker (and, for billing,
     // AI_CREDITS_ENABLED). No commercial value ships in code — the audio cost
     // basis lives here, like the advisor token prices.
     AI_PHONE_ENABLED: z.string().optional(),
@@ -231,9 +234,12 @@ export const env = createEnv({
     // with the purchase. Optional — only needed for auto-provisioning.
     TWILIO_ADDRESS_SID: z.string().optional(),
     TWILIO_BUNDLE_SID: z.string().optional(),
-    // Optional cheaper/faster model for the phone agent (falls back to
-    // AI_ADVISOR_MODEL, then AI_MODEL, then the provider default).
-    AI_PHONE_MODEL: z.string().optional(),
+    // OpenAI models for audio and delegated store reasoning (independent of AI_PROVIDER).
+    AI_PHONE_LIVE_MODEL: z.string().min(1).default("gpt-live-1"),
+    AI_PHONE_BACKEND_MODEL: z.string().min(1).default("gpt-5.6-luna"),
+    AI_PHONE_INPUT_USD_PER_MTOK: z.coerce.number().min(0).optional(),
+    AI_PHONE_OUTPUT_USD_PER_MTOK: z.coerce.number().min(0).optional(),
+    AI_PHONE_CACHED_INPUT_USD_PER_MTOK: z.coerce.number().min(0).optional(),
     // Blended real audio cost of the chosen voice stack, USD per MINUTE
     // (telephony inbound + STT + TTS). Metered per call alongside LLM tokens and
     // converted to credits via AI_CREDIT_COST_BASIS_USD. 0/unset ⇒ audio metering
@@ -258,38 +264,23 @@ export const env = createEnv({
     AI_PHONE_NUMBER_COST_USD_PER_MONTH: z.coerce.number().min(0).optional(),
     // Hard cap on call duration (seconds) to bound cost / toll-fraud blast radius.
     AI_PHONE_MAX_CALL_SECONDS: z.coerce.number().int().min(30).max(3600).default(600),
-    // ----- Streaming transport (Twilio ConversationRelay) -----
-    // Phone transport. 'gather' (default) = turn-based Twilio <Gather>, robust and
-    // serverless-friendly. 'relay' = Twilio ConversationRelay (streaming STT/TTS +
-    // barge-in) through a self-hosted WebSocket worker — needs VOICE_RELAY_WS_URL
-    // and VOICE_RELAY_SIGNING_SECRET, else it stays on <Gather>.
-    AI_PHONE_TRANSPORT: z.enum(["gather", "relay"]).optional(),
-    // Public wss:// URL of the ConversationRelay worker (e.g. wss://voice-relay.example.com).
-    VOICE_RELAY_WS_URL: z.string().optional(),
-    // HMAC secret shared with the worker: authenticates the relay handshake and
-    // the worker↔app per-turn requests, both directions. Required for 'relay'.
-    VOICE_RELAY_SIGNING_SECRET: z.string().optional(),
-    // ConversationRelay TTS/STT providers (never hardcoded). Defaults tuned for
-    // realism + latency. https://www.twilio.com/docs/voice/twiml/connect/conversationrelay
-    AI_PHONE_TTS_PROVIDER: z.string().optional(),
-    AI_PHONE_STT_PROVIDER: z.string().optional(),
-    // Provider voice id per app locale (JSON), e.g. {"fr":"<id>","en":"<id>"}. A
-    // per-store voice (settings.voice) overrides it. All 8 locales supported.
-    AI_PHONE_VOICES: z.string().optional(),
-    // Fallback voice id when a locale is absent from AI_PHONE_VOICES and the store set none.
-    AI_PHONE_DEFAULT_VOICE: z.string().optional(),
-    // Catalog of voices a STORE can pick from, per app locale (JSON):
-    // {"fr":[{"id":"<id>","label":"Léa","gender":"female"}, ...], ...}. Powers the
-    // in-dashboard voice picker; the chosen id is saved as the store voice. Voice
-    // ids stay in env, never in the repo.
-    AI_PHONE_VOICE_CATALOG: z.string().optional(),
-    // ElevenLabs API key (optional). When set, the dashboard voice picker is
-    // populated automatically from the account's voices (name + gender) and the
-    // store can PREVIEW a voice speaking a sample in the chosen language.
-    ELEVENLABS_API_KEY: z.string().optional(),
-    // Voice ids to surface first with a "recommended" badge in the picker,
-    // comma-separated. Operator-curated, kept in env (never in the repo).
-    AI_PHONE_RECOMMENDED_VOICES: z.string().optional(),
+    // GPT-Live worker origin. No path/query; Twilio connects to /media.
+    VOICE_RELAY_WS_URL: z
+      .url()
+      .refine((value) => {
+        const url = new URL(value);
+        return (
+          url.protocol === "wss:" &&
+          url.pathname === "/" &&
+          !url.search &&
+          !url.hash &&
+          !url.username &&
+          !url.password
+        );
+      }, "Expected a wss:// origin")
+      .optional(),
+    VOICE_RELAY_SIGNING_SECRET: z.string().min(32).optional(),
+    AI_PHONE_DEFAULT_VOICE: z.string().refine(isLiveVoice, "Unsupported GPT-Live voice").optional(),
 
     // ===== Product image processing (Optional — dashboard tools) =====
     // Private rembg service used for direct background removal and after GPT
@@ -301,7 +292,7 @@ export const env = createEnv({
     // background-removal service above is configured. The dedicated key takes
     // precedence over AI_API_KEY when AI_PROVIDER === 'openai'.
     AI_IMAGE_OPENAI_API_KEY: z.string().optional(),
-    // Image-edit model (defaults to gpt-image-2). Overrides must support the
+    // Image-edit model (defaults to gpt-image-2.6-sunburst). Overrides must support the
     // flexible 1600x1200 size and opaque output contract.
     AI_IMAGE_MODEL: z.string().optional(),
     // Render quality asked of GPT Image. Higher = slower and more expensive.
@@ -313,7 +304,7 @@ export const env = createEnv({
     // step). Defaults to 0 = free, so metering it is an explicit operator
     // decision rather than an accident of the shared credit layer.
     AI_IMAGE_BG_REMOVAL_CREDITS: z.coerce.number().min(0).default(0),
-    // GPT Image token prices in USD per 1M tokens. Defaults match GPT Image 2
+    // GPT Image token prices in USD per 1M tokens. Defaults match GPT Image 2.6
     // standard pricing; override all three when using another model or tariff.
     AI_IMAGE_TEXT_INPUT_USD_PER_MTOK: z.coerce.number().min(0).default(5),
     AI_IMAGE_INPUT_USD_PER_MTOK: z.coerce.number().min(0).default(8),
@@ -334,19 +325,17 @@ export const env = createEnv({
     FROMHELLO_API_URL: z.url().optional(),
     FROMHELLO_API_KEY: z.string().optional(),
 
-    // ===== Pay-as-you-go default pricing (Optional) =====
-    // JSON describing the per-rental pricing snapshotted onto every NEW store at
-    // account creation (an "ephemeral offer"). Omitted/empty → the hardcoded platform
-    // default ladder. Changing this only affects accounts created AFTER the deploy;
-    // existing stores keep the pricing snapshotted at their creation. Validated at
-    // boot so a malformed offer fails the deploy instead of silently mispricing.
-    // Examples:
-    //   {"flatRateCents":25}                                  → 0.25€ per rental, flat
-    //   {"tiers":[{"upToCount":50,"priceCents":25},{"upToCount":null,"priceCents":100}]}
-    // Number of free reservations gifted to a NEW store at account creation (the
-    // welcome allowance). While credits remain, a rental's pay-as-you-go commission is
-    // waived. Snapshotted per store at creation and editable per store in admin, so
-    // changing this only affects accounts created afterwards. Default 15.
+    // ===== Klibon affiliate program (LOUEZ_BILLING=cloud only) =====
+    // The program id from the Klibon dashboard. Set, the sign-in, onboarding and dashboard
+    // pages load its tag, and plan Checkouts carry the affiliate's code. Unset: no tag.
+    KLIBON_PROGRAM_ID: z.uuid().optional(),
+
+    // ===== Pay-as-you-go offer for new stores (LOUEZ_BILLING=cloud only) =====
+    // PAYG_FREE_RESERVATIONS is written onto a NEW store's subscription row when Louez's
+    // own billing creates it, with the built-in per-rental ladder. Existing stores pay
+    // what their own row says, so changing it only affects stores created afterwards.
+    // It is the welcome allowance: while credits remain, a rental's pay-as-you-go
+    // commission is waived. Editable per store in admin. Default 15.
     PAYG_FREE_RESERVATIONS: z.coerce.number().int().min(0).max(100_000).default(15),
 
     // First stores published on reeent receive a lifetime marketplace-fee waiver.
@@ -357,35 +346,7 @@ export const env = createEnv({
       .default("false")
       .transform((value) => value === "true"),
 
-    PAYG_DEFAULT_PRICING: z
-      .string()
-      .optional()
-      .transform((val, ctx) => {
-        if (!val || val.trim() === "") return undefined;
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(val);
-        } catch {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "PAYG_DEFAULT_PRICING must be valid JSON",
-          });
-          return z.NEVER;
-        }
-        const result = payAsYouGoConfigSchema.safeParse(parsed);
-        if (!result.success) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: `PAYG_DEFAULT_PRICING is invalid: ${result.error.issues
-              .map((i) => i.message)
-              .join("; ")}`,
-          });
-          return z.NEVER;
-        }
-        return result.data;
-      }),
-
-    // ===== Referral program =====
+    // ===== Referral program (LOUEZ_BILLING=cloud only: rewards are billing credits) =====
     // Free reservations granted to the Referrer when a referral qualifies (PAYG referrer;
     // a subscribed referrer gets the equivalent euro invoice credit). Default 30.
     REFERRAL_REFERRER_REWARD: z.coerce.number().int().min(0).max(100_000).default(30),
@@ -404,6 +365,29 @@ export const env = createEnv({
     // routing (the cloud). Consumed through lib/deployment.ts, which reads
     // process.env directly so the prebuilt Docker image honors it at runtime.
     LOUEZ_MODE: z.enum(["standalone", "platform"]).optional(),
+    // Platform billing: off (default) or cloud. Consumed through lib/billing/mode.ts, which
+    // reads process.env at call time like LOUEZ_MODE; validated here at runtime.
+    LOUEZ_BILLING: louezBillingSchema,
+    // Who hosts this instance, for the storefront legal notice and the dashboard's
+    // GitHub star prompt. Unset (the default): the operator hosts it, so the notice names
+    // no host and the dashboard may ask for a star. `lumycloud`: Louez Cloud, hosted by
+    // LumyCloud; with LOUEZ_BILLING=cloud the server refuses to start without it
+    // (lib/billing/startup-check.ts). Consumed through lib/hosting.ts at call time, like
+    // LOUEZ_MODE.
+    LOUEZ_HOSTED_BY: louezHostedBySchema,
+    // The private billing service (louez-billing docs/api, README §4.3 and §12). Ignored
+    // unless LOUEZ_BILLING=cloud and BILLING_SERVICE_URL are both set; then
+    // lib/billing-sync/config.ts checks them and the server refuses to start when one is
+    // wrong (instrumentation.ts). Plain strings here, so a self-hosted instance never
+    // fails on them.
+    BILLING_SERVICE_URL: z.string().optional(),
+    // JSON {"<kid>": "<secret>"}: request secrets (kids start with louez-req-).
+    BILLING_OUTBOUND_KEYS: z.string().optional(),
+    BILLING_OUTBOUND_ACTIVE_KID: z.string().optional(),
+    // JSON {"<kid>": "<secret>"}: response secrets Louez accepts (kids start with billing-res-).
+    BILLING_RESPONSE_KEYS: z.string().optional(),
+    // Stores created at or after this ISO instant are new (README §8.3, Q26).
+    BILLING_NEW_STORES_FROM: z.string().optional(),
 
     // ===== Development =====
     AUTO_DB_SETUP: z
@@ -480,28 +464,25 @@ export const env = createEnv({
     AI_CREDIT_MONTHLY_INCLUDED: process.env.AI_CREDIT_MONTHLY_INCLUDED,
     AI_CREDIT_PACKAGES: process.env.AI_CREDIT_PACKAGES,
     AI_PHONE_ENABLED: process.env.AI_PHONE_ENABLED,
+    AI_PHONE_LIVE_MODEL: process.env.AI_PHONE_LIVE_MODEL,
+    AI_PHONE_BACKEND_MODEL: process.env.AI_PHONE_BACKEND_MODEL,
+    AI_PHONE_INPUT_USD_PER_MTOK: process.env.AI_PHONE_INPUT_USD_PER_MTOK,
+    AI_PHONE_OUTPUT_USD_PER_MTOK: process.env.AI_PHONE_OUTPUT_USD_PER_MTOK,
+    AI_PHONE_CACHED_INPUT_USD_PER_MTOK: process.env.AI_PHONE_CACHED_INPUT_USD_PER_MTOK,
     VOICE_PROVIDER: process.env.VOICE_PROVIDER,
     TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID,
     TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
     TWILIO_ADDRESS_SID: process.env.TWILIO_ADDRESS_SID,
     TWILIO_BUNDLE_SID: process.env.TWILIO_BUNDLE_SID,
-    AI_PHONE_MODEL: process.env.AI_PHONE_MODEL,
     AI_VOICE_AUDIO_USD_PER_MIN: process.env.AI_VOICE_AUDIO_USD_PER_MIN,
     AI_PHONE_MAX_CREDITS_PER_CALL: process.env.AI_PHONE_MAX_CREDITS_PER_CALL,
     AI_PHONE_CREDITS_PER_MINUTE: process.env.AI_PHONE_CREDITS_PER_MINUTE,
     AI_PHONE_NUMBER_RENTAL_CREDITS: process.env.AI_PHONE_NUMBER_RENTAL_CREDITS,
     AI_PHONE_NUMBER_COST_USD_PER_MONTH: process.env.AI_PHONE_NUMBER_COST_USD_PER_MONTH,
     AI_PHONE_MAX_CALL_SECONDS: process.env.AI_PHONE_MAX_CALL_SECONDS,
-    AI_PHONE_TRANSPORT: process.env.AI_PHONE_TRANSPORT,
     VOICE_RELAY_WS_URL: process.env.VOICE_RELAY_WS_URL,
     VOICE_RELAY_SIGNING_SECRET: process.env.VOICE_RELAY_SIGNING_SECRET,
-    AI_PHONE_TTS_PROVIDER: process.env.AI_PHONE_TTS_PROVIDER,
-    AI_PHONE_STT_PROVIDER: process.env.AI_PHONE_STT_PROVIDER,
-    AI_PHONE_VOICES: process.env.AI_PHONE_VOICES,
     AI_PHONE_DEFAULT_VOICE: process.env.AI_PHONE_DEFAULT_VOICE,
-    AI_PHONE_VOICE_CATALOG: process.env.AI_PHONE_VOICE_CATALOG,
-    ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
-    AI_PHONE_RECOMMENDED_VOICES: process.env.AI_PHONE_RECOMMENDED_VOICES,
     AI_IMAGE_BACKGROUND_REMOVAL_URL: process.env.AI_IMAGE_BACKGROUND_REMOVAL_URL,
     AI_IMAGE_BACKGROUND_REMOVAL_TOKEN: process.env.AI_IMAGE_BACKGROUND_REMOVAL_TOKEN,
     AI_IMAGE_OPENAI_API_KEY: process.env.AI_IMAGE_OPENAI_API_KEY,
@@ -517,10 +498,17 @@ export const env = createEnv({
     AI_IMAGE_DEBUG_ENABLED: process.env.AI_IMAGE_DEBUG_ENABLED,
     FROMHELLO_API_URL: process.env.FROMHELLO_API_URL,
     FROMHELLO_API_KEY: process.env.FROMHELLO_API_KEY,
+    KLIBON_PROGRAM_ID: process.env.KLIBON_PROGRAM_ID,
     LOUEZ_MODE: process.env.LOUEZ_MODE,
+    LOUEZ_BILLING: process.env.LOUEZ_BILLING,
+    LOUEZ_HOSTED_BY: process.env.LOUEZ_HOSTED_BY,
+    BILLING_SERVICE_URL: process.env.BILLING_SERVICE_URL,
+    BILLING_OUTBOUND_KEYS: process.env.BILLING_OUTBOUND_KEYS,
+    BILLING_OUTBOUND_ACTIVE_KID: process.env.BILLING_OUTBOUND_ACTIVE_KID,
+    BILLING_RESPONSE_KEYS: process.env.BILLING_RESPONSE_KEYS,
+    BILLING_NEW_STORES_FROM: process.env.BILLING_NEW_STORES_FROM,
     AUTO_DB_SETUP: process.env.AUTO_DB_SETUP,
     PREVIEW_STORE_SLUG: process.env.PREVIEW_STORE_SLUG,
-    PAYG_DEFAULT_PRICING: process.env.PAYG_DEFAULT_PRICING,
     PAYG_FREE_RESERVATIONS: process.env.PAYG_FREE_RESERVATIONS,
     REEENT_LAUNCH_COHORT_SIZE: process.env.REEENT_LAUNCH_COHORT_SIZE,
     MARKETPLACE_DEFAULT_PUBLICATION_ENABLED: process.env.MARKETPLACE_DEFAULT_PUBLICATION_ENABLED,

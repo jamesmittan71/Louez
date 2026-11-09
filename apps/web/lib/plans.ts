@@ -1,9 +1,12 @@
 import { env } from '@/env';
-import type { Plan } from '@/lib/plans.shared';
+import { isBillingEnabled } from '@/lib/billing/mode';
+import { PAY_AS_YOU_GO_PLAN, type Plan } from '@/lib/plans.shared';
 
 export {
   CURRENCY_SYMBOLS,
+  PAY_AS_YOU_GO_PLAN,
   SUPPORTED_CURRENCIES,
+  findPlanPrice,
   formatPlanPrice,
   getPlanPriceId,
   getYearlyPrice,
@@ -26,10 +29,13 @@ export const SMS_TOPUP_PRICING: Record<string, number | null> = {
 
 /**
  * Whether the paid AI-credit layer is active. When off (self-host default), the
- * advisor runs on rate-limits only: no metering, no gate, no billing UI.
+ * advisor runs on rate-limits only: no metering, no gate, no billing UI. Credits are
+ * sold by the platform, so the layer also needs platform billing (LOUEZ_BILLING=cloud).
  */
 export function areAiCreditsEnabled(): boolean {
-  return env.AI_CREDITS_ENABLED === 'true' || env.AI_CREDITS_ENABLED === '1';
+  return (
+    isBillingEnabled() && (env.AI_CREDITS_ENABLED === 'true' || env.AI_CREDITS_ENABLED === '1')
+  );
 }
 
 /** Monthly INCLUDED credits per plan slug, parsed from env JSON. `{}` when unset. */
@@ -145,41 +151,6 @@ const BASE_PLANS: Record<
   },
 };
 
-/**
- * Pseudo-plan for pay-as-you-go stores. Not purchasable as a subscription — it is
- * returned by `getStorePlan` when a store's billing mode is `pay_as_you_go`. PAYG
- * stores pay per rental, so every limit is unlimited and every feature is unlocked.
- * Exception: pay-as-you-go includes NO free SMS — unlike Pro/Ultra which bundle a
- * monthly allowance, PAYG stores pay for every SMS (via top-up credits).
- */
-export const PAY_AS_YOU_GO_PLAN: Plan = {
-  slug: 'pay_as_you_go',
-  name: 'Pay as you go',
-  description: 'Facturation à la location',
-  price: 0,
-  features: {
-    maxProducts: null,
-    maxReservationsPerMonth: null,
-    maxCustomers: null,
-    maxCollaborators: null,
-    maxSmsPerMonth: 0,
-    aiCreditsPerMonth: 0, // PAYG: no monthly allowance, prepaid credits only
-    onlinePayment: true,
-    analytics: true,
-    emailNotifications: true,
-    whiteLabel: true,
-    customDomain: true,
-    prioritySupport: true,
-    customerPortal: true,
-    reviewBooster: true,
-    aiAdvisor: true,
-    aiPhone: true,
-    apiAccess: true,
-    phoneSupport: true,
-    dedicatedManager: false,
-  },
-};
-
 export function getPayAsYouGoPlan(): Plan {
   return { ...PAY_AS_YOU_GO_PLAN };
 }
@@ -253,13 +224,3 @@ export function getDefaultPlan(): Plan {
   return getPayAsYouGoPlan();
 }
 
-/**
- * Check if Stripe is configured for subscriptions
- */
-export function isStripeConfigured(): boolean {
-  return !!(
-    env.STRIPE_SECRET_KEY &&
-    env.STRIPE_PRICE_PRO_MONTHLY &&
-    env.STRIPE_PRICE_ULTRA_MONTHLY
-  );
-}

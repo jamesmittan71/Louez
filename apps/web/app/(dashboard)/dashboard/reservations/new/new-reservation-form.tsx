@@ -44,6 +44,8 @@ import {
   readProductTaxSettings,
 } from "@louez/utils";
 
+import { ReservationGateDialog } from "@/components/dashboard/reservation-gate-dialog";
+import { isReservationGateRefusal } from "@/lib/billing/reservation-gate-error";
 import { invalidateReservationList } from "@/lib/orpc/invalidation";
 import { trackOpenReplayEvent } from "@/lib/openreplay/client";
 import { openReplayEvents } from "@/lib/openreplay/events";
@@ -190,6 +192,7 @@ export function NewReservationForm({
   }, []);
 
   const [createdCustomers, setCreatedCustomers] = useState<Customer[]>([]);
+  const [gateDialogOpen, setGateDialogOpen] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
   const [customItems, setCustomItems] = useState<CustomItem[]>([]);
   const [showCustomItemDialog, setShowCustomItemDialog] = useState(false);
@@ -502,6 +505,10 @@ export function NewReservationForm({
         error_code: error instanceof Error ? error.message : "unknown",
         source: openReplaySource,
       });
+      if (isReservationGateRefusal(error)) {
+        setGateDialogOpen(true);
+        return;
+      }
       toastManager.add({
         title: getActionErrorMessage(error),
         type: "error",
@@ -2259,6 +2266,8 @@ export function NewReservationForm({
           </DialogFooter>
         </DialogPopup>
       </Dialog>
+
+      <ReservationGateDialog open={gateDialogOpen} onOpenChange={setGateDialogOpen} />
     </>
   );
 }

@@ -1,0 +1,42 @@
+import type { PolicyReservations } from "@louez/db";
+
+import type { BillingAccess } from "@/lib/billing/billing-access";
+
+// What the billing settings' offer card shows, from the cached policy (louez-billing
+// docs/plans/design.md §6.1; docs/api README §8.4): the offer label, whether the store
+// takes reservations, and the service's notice.
+
+type LocalizedText = Readonly<Record<string, string>> & { readonly en: string };
+
+export type BlockedReason = Extract<PolicyReservations, { allowed: false }>["reason"];
+
+export type BillingOverview = {
+  /** The service's words for the offer; null before the store has a policy. */
+  readonly offer: string | null;
+  /** The service's notice, such as a block to come; null when there is none. */
+  readonly notice: string | null;
+  /** Why the card gate refuses billable reservations now, or null when it does not. */
+  readonly blockedReason: BlockedReason | null;
+  /** A platform admin sees the billing pages read-only. */
+  readonly readOnly: boolean;
+};
+
+/**
+ * A label in the user's language if the service sent it, otherwise English (README
+ * §8.4). React renders it as text, never as HTML.
+ */
+export function localizedLabel(text: LocalizedText, locale: string): string {
+  return text[locale] ?? text.en;
+}
+
+export function describeBillingOverview(access: BillingAccess, locale: string): BillingOverview {
+  const { policy, terms } = access.policy;
+  const blockedReason = terms.reservations.allowed ? null : terms.reservations.reason;
+  const notice = policy?.labels.notice;
+  return {
+    offer: policy ? localizedLabel(policy.labels.offer, locale) : null,
+    notice: notice ? localizedLabel(notice, locale) : null,
+    blockedReason,
+    readOnly: access.role === "platform_admin",
+  };
+}

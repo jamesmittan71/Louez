@@ -40,7 +40,7 @@
     "title": "예약이 확인되었습니다!",
     "body": "귀하의 예약번호 #{number}가 확인되었습니다. 요약은 다음과 같습니다.",
     "summary": "요약",
-    "contractSignature": "계약서가 첨부되었으며 온라인으로 서명할 준비가 되었습니다.",
+    "contractSignature": "대여 계약서가 준비되었습니다. 장비를 수령하기 전에 온라인으로 서명해 주세요.",
     "signContract": "계약서에 서명하세요"
   },
   "requestReceived": {
@@ -86,7 +86,9 @@
     "dontForget": "잊지 마세요:",
     "bringId": "유효한 신분증",
     "bringConfirmation": "예약 확인",
-    "seeTomorrow": "내일 봐요!"
+    "seeTomorrow": "내일 봐요!",
+    "contractSignature": "렌탈 계약서에 아직 서명하지 않으셨습니다. 장비를 수령하기 전에 온라인으로 서명해 주세요.",
+    "signContract": "계약서 서명"
   },
   "reminderReturn": {
     "subject": "알림: {date}에서 장비 반납",
@@ -204,6 +206,22 @@
       "body": "{storeName}의 번호 {number}가 분리되어 더 이상 활성 상태가 아닙니다. AI Assistant에서 언제든지 새 번호를 선택할 수 있습니다."
     }
   },
+  "balanceLimit": {
+    "balanceLabel": "미납 잔액:",
+    "limitLabel": "한도:",
+    "cta": "카드 추가",
+    "footer": "카드를 등록하면 Louez가 명세서 금액을 자동으로 해당 카드에 청구합니다.",
+    "near": {
+      "subject": "{storeName}: 미납 잔액이 한도에 가까워지고 있습니다",
+      "title": "미납 잔액이 한도에 가까워지고 있습니다",
+      "body": "{storeName}이(가) Louez에 아직 납부하지 않은 금액이 한도에 가까워지고 있습니다. 한도에 도달하면 스토어가 새 예약을 받지 않습니다. 청구 카드를 추가하면 명세서가 자동으로 결제됩니다."
+    },
+    "reached": {
+      "subject": "{storeName}: 새 예약이 일시 중지되었습니다",
+      "title": "미납 잔액이 한도에 도달했습니다",
+      "body": "{storeName}이(가) Louez에 아직 납부하지 않은 금액이 한도에 도달하여 스토어가 당분간 새 예약을 받지 않습니다. 예약을 다시 받으려면 청구 카드를 추가하세요."
+    }
+  },
   "teamInvitation": {
     "subject": "{inviterName}가 {storeName}에 가입하도록 귀하를 초대합니다",
     "title": "팀 초대",
@@ -313,7 +331,9 @@
     "subject": "임대 계약 #{number}",
     "title": "임대 계약",
     "body": "예약 #{number}에 대한 임대 계약은 다음과 같습니다.",
-    "downloadContract": "계약서 다운로드"
+    "downloadContract": "계약서 다운로드",
+    "signBody": "예약 #{number}의 렌탈 계약서입니다. 장비를 수령하기 전에 온라인으로 읽고 서명해 주세요.",
+    "signContract": "계약서 서명"
   },
   "customMessage": {
     "subject": "예약 정보 #{number}"

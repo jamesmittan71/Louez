@@ -214,8 +214,8 @@
       "sessionExpired": "Uw sessie is verlopen. Log opnieuw in en probeer het nog eens.",
       "passwordSignUpDisabled": "Een account aanmaken met een wachtwoord is niet mogelijk. Gebruik een code per e-mail."
     },
-    "referralBanner": "{storeName} heeft je uitgenodigd voor Louez — maak je winkel aan en start met {count} gratis reserveringen.",
-    "referralBannerGeneric": "🎁 Je bent uitgenodigd voor Louez — maak je winkel aan en start met {count} gratis reserveringen.",
+    "referralBanner": "{storeName} heeft je uitgenodigd voor Louez — maak je winkel aan in een paar minuten.",
+    "referralBannerGeneric": "Je bent uitgenodigd voor Louez — maak je winkel aan in een paar minuten.",
     "socialProofRating": "4,9/5",
     "socialProofTrusted": "Meer dan 450 verhuurders vertrouwen op ons voor het beheer van hun verhuur",
     "review1Quote": "We verlieten onze oude software toen de prijzen te hoog werden en stapten over naar Louez.io… en eerlijk gezegd: geen spijt! Eenvoudig, flexibel, voordelig en efficiënt.",
@@ -224,8 +224,8 @@
     "review2Role": "Medeoprichter · Bloom",
     "review3Quote": "Louez.io is een betrouwbaar, duidelijk en nauwkeurig platform. Het beheer van het seizoen wordt veel eenvoudiger en sneller.",
     "review3Role": "Medeoprichter · Les Frères Complices",
-    "perk1": "Je eerste 15 reserveringen gratis",
-    "perk2": "Max. € 1 per reservering, goedkoper naarmate je groeit, 0% commissie, geen abonnement",
+    "perk1": "Reserveringen 24/7, online betaling en borg",
+    "perk2": "Automatische contracten en klantenportaal",
     "perk3": "Je webshop klaar in 5 minuten",
     "visitShop": "Bekijk de winkel",
     "name": "Naam",
@@ -251,6 +251,52 @@
     "hidePassword": "Wachtwoord verbergen",
     "passwordRules": {
       "minLength": "Minstens {count} tekens"
+    },
+    "passkey": {
+      "prompt": {
+        "title": "Log de volgende keer sneller in"
+      },
+      "setup": {
+        "title": "Je volgende aanmelding, eenvoudig",
+        "description": "Maak een passkey om je aan te melden met je vingerafdruk, gezicht of de pincode van je apparaat.",
+        "privacy": "Je biometrische gegevens blijven op je apparaat. Je andere aanmeldmethoden blijven beschikbaar.",
+        "account": "Voor je account",
+        "enable": "Mijn passkey maken",
+        "waiting": "Bevestig op je apparaat…",
+        "later": "Misschien later",
+        "successTitle": "Je passkey is klaar",
+        "successDescription": "Deze wordt als eerste aangeboden wanneer je je weer aanmeldt in deze browser.",
+        "done": "Doorgaan"
+      },
+      "login": {
+        "title": "Welkom terug",
+        "description": "Meld je aan met je passkey. Je apparaat vraagt je om je identiteit te bevestigen.",
+        "continue": "Aanmelden met een passkey",
+        "waiting": "Wachten op je apparaat…",
+        "otherMethod": "Een andere methode gebruiken"
+      },
+      "settings": {
+        "title": "Passkeys",
+        "description": "Meld je snel en veilig aan zonder een wachtwoord te typen.",
+        "empty": "Er zijn nog geen passkeys geregistreerd.",
+        "add": "Passkey toevoegen",
+        "defaultName": "Passkey",
+        "created": "Toegevoegd op {date, date, medium}",
+        "unsupported": "Gebruik een ondersteunde browser en een beveiligde verbinding (HTTPS).",
+        "remove": "Verwijderen",
+        "removeTitle": "Deze passkey verwijderen?",
+        "removeDescription": "Je kunt deze niet meer gebruiken om je aan te melden bij Louez. Je andere aanmeldmethoden blijven beschikbaar. Je kunt deze ook uit de passkeybeheerder van je apparaat verwijderen.",
+        "removed": "Passkey verwijderd",
+        "cancel": "Annuleren"
+      },
+      "reauthenticate": "Opnieuw aanmelden",
+      "errors": {
+        "cancelled": "Het verzoek is geannuleerd of verlopen. Probeer het opnieuw of gebruik een andere methode.",
+        "alreadyRegistered": "Deze passkey is al geregistreerd. Je kunt deze gebruiken om je aan te melden.",
+        "reauthenticate": "Meld je opnieuw aan voordat je je passkeys beheert om je account te beschermen.",
+        "rateLimited": "Te veel pogingen. Wacht een minuut voordat je het opnieuw probeert.",
+        "failed": "Deze passkey kan niet worden gebruikt. Probeer het opnieuw of kies een andere methode."
+      }
     }
   },
   "invitation": {
@@ -422,6 +468,15 @@
       "newReservation": "Nieuwe reservering #{number}",
       "newReservationDescription": "Er is een nieuwe reserveringsaanvraag binnengekomen"
     },
+    "reservationGate": {
+      "pausedTitle": "Nieuwe reserveringen zijn gepauzeerd",
+      "pausedDescription": "Klanten kunnen niet online boeken en nieuwe bevestigingen wachten tot de facturatie van de winkel in orde is.",
+      "noticeTitle": "De facturatie vraagt je aandacht",
+      "noticeDescription": "Controleer de facturatie van de winkel om reserveringen te blijven ontvangen.",
+      "manageBilling": "Facturatie beheren",
+      "storefrontDescription": "Klanten zien dat de winkel geen online reserveringen aanneemt.",
+      "openDashboard": "Naar dashboard"
+    },
     "pendingAlert": {
       "singlePending": "1 openstaande aanvraag",
       "multiplePending": "{count} openstaande aanvragen",
@@ -557,8 +612,8 @@
       "link": {
         "title": "Verwijs & verdien",
         "description": "Deel uw link en nodig andere verhuurders uit om zich aan te sluiten bij Louez.",
-        "reward": "Voor elke verhuurder die je aanbrengt en die zijn eerste verkoop doet, verdien je {referrer} gratis reserveringen (≈ {rewardValue}) — en hij start met {referred}.",
-        "rewardInvoiceCredit": "Voor elke verhuurder die je aanbrengt en die zijn eerste verkoop doet, verdien je {rewardValue} krediet op je Louez-factuur — en hij start met {referred} gratis reserveringen.",
+        "reward": "Voor elke verhuurder die je aanbrengt en die zijn eerste verkoop doet, verdien je {referrer} gratis reserveringen (≈ {rewardValue}).",
+        "rewardInvoiceCredit": "Voor elke verhuurder die je aanbrengt en die zijn eerste verkoop doet, verdien je {rewardValue} krediet op je Louez-factuur.",
         "copyLink": "Link kopiëren",
         "linkCopied": "Link gekopieerd!",
         "linkCopyFailed": "Kon de link niet kopiëren.",
@@ -589,8 +644,8 @@
       },
       "nudge": {
         "title": "Tevreden over Louez?",
-        "description": "Verwijs een verhuurder — jullie verdienen allebei {count} gratis reserveringen (≈ {rewardValue}).",
-        "descriptionInvoiceCredit": "Verwijs een verhuurder — hij start met {count} gratis reserveringen, jij verdient {rewardValue} krediet.",
+        "description": "Verwijs een verhuurder — je verdient {count} gratis reserveringen (≈ {rewardValue}) zodra hij zijn eerste online verkoop doet.",
+        "descriptionInvoiceCredit": "Verwijs een verhuurder — je verdient {rewardValue} krediet zodra hij zijn eerste online verkoop doet.",
         "cta": "Verwijzen",
         "dismiss": "Sluiten"
       },
@@ -604,7 +659,7 @@
         "open": "Hoe het werkt",
         "title": "Hoe verwijzingen werken",
         "step1": "Deel je uitnodigingslink met andere verhuurders.",
-        "step2": "Je verwijzing start met {count} gratis reserveringen zodra ze zich aanmelden.",
+        "step2": "Je verwijzing maakt zijn Louez-winkel aan via je link.",
         "step3": "Zodra je verwijzing zijn eerste online verkoop van minstens {minAmount} doet, verdien je {count} gratis reserveringen.",
         "step3InvoiceCredit": "Zodra je verwijzing zijn eerste online verkoop van minstens {minAmount} doet, verdien je krediet op je volgende Louez-factuur.",
         "note": "Alleen online betaalde verkopen (kaart/Stripe) ontgrendelen de beloning — handmatige of contante betalingen tellen niet. Gratis reserveringen zijn verhuringen zonder Louez-commissie."
@@ -765,7 +820,7 @@
         "tagline": {
           "label": "Slogan",
           "description": "Eén zin onder de naam, bovenaan de homepage. Maximaal {max} tekens.",
-          "placeholder": "Fiets- en supverhuur in Carnac sinds 2012"
+          "placeholder": "Beschrijf uw bedrijf in één zin…"
         },
         "descriptionHint": "De tekst van de pagina Over ons. Zonder slogan verschijnt hij ook bovenaan de homepage.",
         "logos": {
@@ -1888,6 +1943,20 @@
             "unassigned": "Losgekoppeld van een reservering",
             "updated": "Eenheid bijgewerkt"
           }
+        },
+        "customerFields": {
+          "title": "Gegevens gevraagd aan de klant",
+          "description": "Online gevraagd of per gehuurd artikel genoteerd.",
+          "scope": {
+            "customer": "Klantgegevens",
+            "item": "Per artikel"
+          },
+          "collect": {
+            "never": "Alleen team",
+            "optional": "Online · Optioneel",
+            "required": "Online · Verplicht"
+          },
+          "manage": "Beheren in Klantgegevens"
         }
       }
     },
@@ -2357,10 +2426,31 @@
       },
       "contract": {
         "title": "Contract",
-        "signed": "Ondertekend op {date}",
-        "notSigned": "Niet ondertekend",
         "generate": "Contract genereren",
-        "download": "Downloaden"
+        "download": "Downloaden",
+        "signedBadge": "Contract ondertekend",
+        "unsignedBadge": "Contract niet ondertekend",
+        "signedOn": "Op {date}",
+        "unsignedTooltip": "De klant heeft het contract nog niet geaccepteerd. Hij kan het ondertekenen via de link in zijn e-mail of in de winkel bij het ophalen.",
+        "methods": {
+          "checkout": "Geaccepteerd bij de online boeking",
+          "payment_page": "Ondertekend op de betaalpagina",
+          "account": "Ondertekend via het klantaccount",
+          "in_store": "Ter plaatse ondertekend"
+        },
+        "signInStore": "Ter plaatse laten ondertekenen",
+        "sendSignatureLink": "Ter ondertekening sturen",
+        "signatureLinkSent": "Ondertekeningslink naar de klant gestuurd",
+        "signDialog": {
+          "title": "Contract ter plaatse ondertekenen",
+          "description": "Laat de klant het contract lezen en op dit apparaat ondertekenen. Zijn handtekening en naam komen op het contract.",
+          "viewContract": "Contract openen",
+          "signerName": "Naam van de ondertekenaar",
+          "acceptance": "De klant heeft het contract en de huurvoorwaarden gelezen en gaat ermee akkoord.",
+          "confirm": "Handtekening bevestigen",
+          "success": "Contract ondertekend",
+          "alreadySigned": "Dit contract is al ondertekend."
+        }
       },
       "notes": {
         "title": "Interne notities",
@@ -2638,6 +2728,9 @@
         "quote_accepted": "Offerte geaccepteerd",
         "quote_declined": "Offerte afgewezen",
         "overbooked": "Overboekt",
+        "contract_signed": "Contract ondertekend",
+        "contractUnsigned": "Zonder ondertekend contract",
+        "signedBy": "Ondertekend door {name}",
         "showAll": "Alles tonen ({count} gebeurtenissen)",
         "showLess": "Minder tonen",
         "paymentFailure": {
@@ -2699,6 +2792,11 @@
         "warningDepositTitle": "Borg niet geïnd",
         "warningDepositDescription": "De borg van {amount} is nog niet geïnd. Zorg ervoor dat u deze int voor overdracht.",
         "acknowledgePickupWarnings": "Ik begrijp het en wil ondanks deze waarschuwingen doorgaan",
+        "contractUnsigned": "Contract niet ondertekend",
+        "warningContractTitle": "Contract niet ondertekend",
+        "warningContractDescription": "De klant heeft zijn contract nog niet ondertekend. Laat het ter plaatse ondertekenen of ga verder zonder handtekening: dit wordt in de geschiedenis vermeld.",
+        "acknowledgePickupWithoutSignature": "Ik begrijp het en wil doorgaan, ook zonder ondertekend contract",
+        "warningContractRequiredDescription": "Uw winkel vereist dat het contract vóór het ophalen wordt ondertekend. Laat de klant ter plaatse ondertekenen om verder te gaan.",
         "confirmPickup": "Afhaling bevestigen",
         "returnConfirmTitle": "Retour bevestigen",
         "returnConfirmDescription": "Controleer de staat van het materiaal en het financieel overzicht voor bevestiging.",
@@ -3065,15 +3163,28 @@
       },
       "filter": {
         "type": "Klanttype",
-        "all": "Alle klanten"
+        "all": "Alle klanten",
+        "created": "Aanmaakdatum",
+        "anyDate": "Alle datums",
+        "source": "Herkomst",
+        "allSources": "Elke herkomst",
+        "channel": "Kanaal",
+        "allChannels": "Alle kanalen",
+        "reset": "Filters resetten",
+        "importRun": "Uit een import",
+        "noResults": "Geen klant komt overeen met deze filters.",
+        "from": "Vanaf {date}",
+        "to": "t/m {date}",
+        "more": "Filters",
+        "createdFrom": "Aangemaakt vanaf",
+        "createdTo": "Aangemaakt t/m",
+        "remove": "Filter verwijderen"
       },
       "deleteConfirm": {
         "title": "Deze klant verwijderen?",
         "description": "Deze actie is onomkeerbaar. De klant wordt permanent verwijderd."
       },
       "form": {
-        "personalInfo": "Persoonlijke gegevens",
-        "personalInfoDescription": "Basisinformatie van de klant",
         "businessCustomer": "Zakelijke klant",
         "businessCustomerDescription": "Vink aan als deze klant een bedrijf vertegenwoordigt",
         "companyName": "Bedrijfsnaam",
@@ -3093,8 +3204,6 @@
         "emailPlaceholder": "jan.jansen@voorbeeld.nl",
         "phone": "Telefoon",
         "phonePlaceholder": "06 12 34 56 78",
-        "addressSection": "Adres",
-        "addressDescription": "Adres van de klant (optioneel)",
         "address": "Adres",
         "addressPlaceholder": "Keizersgracht 123",
         "postalCode": "Postcode",
@@ -3107,7 +3216,17 @@
         "internalNotesDescription": "Privénotities over deze klant (niet zichtbaar voor klant)",
         "notesPlaceholder": "Voeg notities toe over deze klant...",
         "save": "Opslaan",
-        "createCustomer": "Klant aanmaken"
+        "createCustomer": "Klant aanmaken",
+        "customerKind": "Klanttype",
+        "birthDate": "Geboortedatum",
+        "ageYears": "{age, plural, one {# jaar} other {# jaar}}",
+        "acquisitionSource": "Hoe heeft de klant u leren kennen?",
+        "acquisitionSourcePlaceholder": "Selecteren",
+        "acquisitionSourceDetail": "Toelichting",
+        "acquisitionSourceDetailPlaceholder": "Toeristenbureau, beurs, partnerhotel…",
+        "socialSection": "Sociale media en links",
+        "customizeFields": "Velden aanpassen",
+        "fieldsTitle": "Gegevens van de klant"
       },
       "countries": {
         "FR": "Frankrijk",
@@ -3122,6 +3241,80 @@
       "quickCreate": {
         "title": "Nieuwe klant",
         "description": "De klant wordt aangemaakt en automatisch geselecteerd."
+      },
+      "sources": {
+        "word_of_mouth": "Mond-tot-mondreclame",
+        "search_engine": "Zoeken op Google",
+        "social_media": "Sociale media",
+        "walk_in": "Langs de winkel gelopen",
+        "partner": "Partner of toeristenbureau",
+        "ads": "Reclame",
+        "returning": "Was al klant",
+        "other": "Overig"
+      },
+      "channels": {
+        "dashboard": "Aangemaakt door het team",
+        "storefront": "Online winkel",
+        "marketplace": "reeent",
+        "import": "Import",
+        "api": "API",
+        "ai": "AI-assistent"
+      },
+      "social": {
+        "add": "Link toevoegen",
+        "remove": "{network} verwijderen",
+        "open": "{network} openen",
+        "placeholderHandle": "@gebruikersnaam of profiellink",
+        "placeholderWebsite": "https://…",
+        "placeholderWhatsapp": "+31 6 12345678",
+        "whatsapp": "WhatsApp",
+        "empty": "Geen links"
+      },
+      "fields": {
+        "yes": "Ja",
+        "no": "Nee",
+        "reveal": "Tonen",
+        "hide": "Verbergen",
+        "copy": "Kopiëren",
+        "copied": "Gekopieerd",
+        "selectPlaceholder": "Selecteren",
+        "suspicious": "Dit nummer lijkt ongeldig. Controleer het: het wordt toch opgeslagen.",
+        "duplicate": "Al in gebruik bij {name}.",
+        "viewCustomer": "Klant bekijken",
+        "complete": "{count, plural, one {# veld invullen} other {# velden invullen}}",
+        "issues": {
+          "required": "Dit veld is verplicht.",
+          "invalidNumber": "Voer een getal in.",
+          "invalidDate": "Ongeldige datum.",
+          "invalidOption": "Kies een waarde uit de lijst.",
+          "invalidEmail": "Ongeldig e-mailadres.",
+          "invalidPhone": "Ongeldig telefoonnummer.",
+          "invalidUrl": "Ongeldige link."
+        }
+      },
+      "detail": {
+        "newReservation": "Nieuwe reservering",
+        "edit": "Bewerken",
+        "moreActions": "Meer acties",
+        "createdVia": "Aangemaakt via: {channel}",
+        "bornOn": "Geboren op {date}",
+        "source": "Herkomst",
+        "lastRental": "Laatste verhuur",
+        "never": "Nooit",
+        "editSection": "Bewerken: {section}",
+        "editSectionDescription": "Alleen deze gegevens worden gewijzigd.",
+        "sectionSaved": "Wijzigingen opgeslagen",
+        "save": "Opslaan",
+        "cancel": "Annuleren",
+        "infoCard": "Gegevens",
+        "emptyInfo": "Nog niets ingevuld."
+      },
+      "pagination": {
+        "showing": "{from}–{to} van {total}",
+        "perPage": "Per pagina",
+        "previous": "Vorige pagina",
+        "next": "Volgende pagina",
+        "pageOf": "Pagina {page} van {pages}"
       }
     },
     "calendar": {
@@ -3445,6 +3638,12 @@
         "manageBilling": "Facturatie beheren",
         "changePlan": "Plan wijzigen",
         "changePlanDescription": "Vergelijk functies en kies het plan dat bij je past.",
+        "changePlanPreviewLoading": "Te betalen bedrag wordt berekend…",
+        "changePlanChargedNow": "Vandaag afgeschreven: {amount}. Je nieuwe plan gaat meteen in.",
+        "changePlanNothingToPay": "Vandaag hoef je niets te betalen. Je nieuwe plan gaat meteen in.",
+        "changePlanAtPeriodEnd": "Vandaag hoef je niets te betalen. Je nieuwe plan gaat in op {date}. Tot die tijd houd je je huidige plan.",
+        "pendingPlanChange": "{currentPlan} tot {date}, daarna {newPlan} {interval, select, yearly {jaarlijks} other {maandelijks}}.",
+        "keepCurrentPlan": "{plan} houden",
         "cancelSubscription": "Abonnement opzeggen",
         "subscribe": "Abonneren",
         "selectPlan": "Dit plan kiezen",
@@ -3607,6 +3806,133 @@
       "team": "Team",
       "saveChanges": "Wijzigingen opslaan",
       "settingsSaved": "Instellingen opgeslagen",
+      "billingReturn": {
+        "refreshed": "De facturatie is bijgewerkt.",
+        "pending": "Het kan enkele minuten duren voordat wijzigingen in de facturatie hier verschijnen."
+      },
+      "billing": {
+        "label": "Facturatie",
+        "description": "Je Louez-aanbod, deze maand, je factuurkaart, je factuurgegevens en je overzichten.",
+        "offerTitle": "Je Louez-aanbod",
+        "offerPending": "Je aanbod verschijnt hier zodra Louez de facturatie voor deze winkel heeft ingesteld.",
+        "status": {
+          "accepting": "Neemt reserveringen aan",
+          "blocked": "Reserveringen gepauzeerd"
+        },
+        "blocked": {
+          "payment_method_required": "Voeg een factuurkaart toe om nieuwe reserveringen aan te nemen.",
+          "payment_overdue": "Een betaling aan Louez is mislukt. Voldoe die om nieuwe reserveringen aan te nemen.",
+          "balance_limit_reached": "Je openstaande saldo heeft de limiet voor winkels zonder kaart bereikt. Voeg een factuurkaart toe en de reserveringen gaan weer door.",
+          "suspended": "De facturatie van deze winkel is opgeschort. Neem contact op met Louez om weer reserveringen aan te nemen."
+        },
+        "readOnly": "Als platformbeheerder bekijk je de facturatie van deze winkel alleen-lezen.",
+        "manage": "Facturatie beheren",
+        "loadFailed": "De facturatie kon niet worden geladen. Probeer het zo opnieuw.",
+        "settingUp": "Je facturatie wordt ingesteld. Kijk over een paar minuten weer op deze pagina.",
+        "month": {
+          "title": "Deze maand",
+          "atSource": "Aan de bron ingehouden",
+          "due": "Verwacht restbedrag",
+          "credit": "Verwacht tegoed",
+          "statementAt": "Volgend overzicht: {date}."
+        },
+        "card": {
+          "title": "Factuurkaart",
+          "description": "Louez belast op deze kaart wat de aan de bron ingehouden kosten niet dekken.",
+          "saved": "{brand} eindigend op {last4}",
+          "otherBrand": "Kaart",
+          "onFile": "Er is een betaalmethode opgeslagen.",
+          "expires": "Verloopt {date}",
+          "expired": "Verlopen sinds {date}. Vervang de kaart zodat je overzichten betaald kunnen worden.",
+          "missing": "Nog geen factuurkaart.",
+          "unknown": "Je factuurkaart wordt hier nog niet getoond.",
+          "notNeeded": "Geen kaart nodig: er wordt niets aan je winkel gefactureerd.",
+          "inLouez": "De betaalmethode van deze winkel wordt voorlopig in het abonnement beheerd.",
+          "balance": "Openstaand saldo: {amount}",
+          "balanceWithLimit": "Openstaand saldo: {amount} · limiet {limit}",
+          "addCardNotice": "Voeg een kaart toe, zodat je overzichten worden betaald zonder dat je iets hoeft te doen.",
+          "add": "Kaart toevoegen",
+          "replace": "Kaart vervangen",
+          "opening": "Stripe openen…",
+          "stripeNote": "Je voert je kaart in op de beveiligde pagina van Stripe en komt daarna hier terug.",
+          "startFailed": "De pagina van Stripe kon niet worden geopend. Probeer het zo opnieuw.",
+          "off": "Een kaart toevoegen is nog niet beschikbaar."
+        },
+        "details": {
+          "title": "Factuurgegevens",
+          "description": "Je facturen van Louez tonen deze gegevens.",
+          "noCustomer": "Voeg eerst een factuurkaart toe. Je factuurgegevens worden samen met die kaart opgeslagen.",
+          "unavailable": "Je factuurgegevens kunnen nu niet worden getoond. Probeer het later opnieuw.",
+          "legalName": "Officiële bedrijfsnaam",
+          "legalNameHint": "De naam van je bedrijf, zoals geregistreerd.",
+          "email": "E-mailadres voor facturen",
+          "emailHint": "Facturen en betaalbewijzen worden naar dit adres gestuurd.",
+          "line1": "Adres",
+          "line2": "Adresregel 2 (optioneel)",
+          "postalCode": "Postcode",
+          "city": "Plaats",
+          "state": "Provincie of regio (optioneel)",
+          "country": "Land",
+          "countryPlaceholder": "Kies een land",
+          "vatNumber": "EU-btw-nummer (optioneel)",
+          "vatNumberHint": "Met de landcode, bijvoorbeeld FR12345678901. Laat leeg als je bedrijf er geen heeft.",
+          "vat": {
+            "pending": "Dit nummer wordt gecontroleerd bij VIES, de btw-nummerdienst van de EU. Laad de pagina over een paar minuten opnieuw.",
+            "verified": "VIES bevestigt dit btw-nummer.",
+            "unverified": "VIES herkent dit btw-nummer niet. Controleer het en sla opnieuw op.",
+            "unavailable": "VIES was niet bereikbaar om dit nummer te controleren. Sla later opnieuw op.",
+            "unknown": "Dit btw-nummer is nog niet gecontroleerd."
+          },
+          "errors": {
+            "required": "Dit veld is verplicht.",
+            "email": "Voer een geldig e-mailadres in.",
+            "refused": "Deze waarde is geweigerd. Controleer de waarde en probeer het opnieuw.",
+            "vatNumber": "Dit btw-nummer is geweigerd. Voer een EU-btw-nummer met landcode in, bijvoorbeeld FR12345678901.",
+            "unavailable": "Je factuurgegevens kunnen nog niet worden opgeslagen. Voeg eerst een factuurkaart toe.",
+            "failed": "Je factuurgegevens konden niet worden opgeslagen. Probeer het zo opnieuw."
+          },
+          "save": "Opslaan",
+          "saved": "Factuurgegevens opgeslagen."
+        },
+        "statements": {
+          "title": "Overzichten",
+          "description": "Wat Louez je winkel factureert, maand voor maand.",
+          "notFinal": "Nog niet definitief: deze bedragen volgen je reserveringen en betalingen zoals ze nu zijn. Facturen zijn nog niet beschikbaar.",
+          "open": "Voorlopig",
+          "summary": "Verschuldigd {owed} · Aan de bron ingehouden {atSource}",
+          "creditOf": "Tegoed van {amount}",
+          "legacy": "Louez factureert je winkel voorlopig zoals voorheen. Je overzichten verschijnen hier zodra je facturatie naar deze pagina verhuist.",
+          "legacyUntil": "Louez factureert je winkel tot {date} zoals voorheen. Daarna verschijnen je overzichten hier.",
+          "empty": "Nog geen overzicht. Je eerste verschijnt hier zodra er iets aan je winkel wordt gefactureerd."
+        },
+        "statement": {
+          "totals": "Totalen",
+          "owed": "Verschuldigd",
+          "atSource": "Aan de bron ingehouden",
+          "due": "Restbedrag",
+          "credit": "Tegoed",
+          "groups": {
+            "commission": "Commissie op betalingen",
+            "unpaid": "Commissie op onbetaalde bedragen",
+            "reservations": "Reserveringskosten",
+            "marketplace": "Marktplaatskosten",
+            "atSource": "Aan de bron ingehouden"
+          },
+          "lines": {
+            "pay": "Betaling",
+            "refund": "Terugbetaling",
+            "dispute_open": "Geschil geopend",
+            "dispute_close": "Geschil gewonnen",
+            "uncollected": "Onbetaald deel van de reservering",
+            "rental": "Reservering",
+            "mkt": "Boeking via de marktplaats",
+            "fee": "Aan de bron ingehouden kosten",
+            "feerefund": "Aan de bron terugbetaalde kosten"
+          },
+          "reservation": "Reservering {number}",
+          "adjusts": "Correctie voor {period}"
+        }
+      },
       "nav": {
         "storeDescription": "Informatie en configuratie",
         "appearanceDescription": "Logo, kleuren en thema",
@@ -4356,6 +4682,14 @@
           "statusRequired": "Selecteer ten minste één status.",
           "noContracts": "Geen reserveringen komen overeen met deze periode en statussen.",
           "exportFailed": "Export mislukt. Probeer het opnieuw."
+        },
+        "customers": {
+          "title": "Klanten",
+          "description": "Exporteer je klantfiches: contactgegevens, geboortedatum, herkomst, aanmaakkanaal en je aangepaste velden.",
+          "button": "Klanten exporteren",
+          "dateRangeHint": "De periode heeft betrekking op de aanmaakdatum van de fiches. Laat ze leeg om al je klanten te exporteren.",
+          "includeSensitive": "Gevoelige gegevens opnemen",
+          "includeSensitiveWarning": "Velden die als gevoelig zijn gemarkeerd, staan leesbaar in het bestand: bewaar het op een veilige plek."
         }
       },
       "embed": {
@@ -4854,9 +5188,9 @@
         "modeOptional": "Keuze van de klant",
         "modeOptionalDescription": "Klant kiest tussen ophalen of bezorging",
         "modeRequired": "Bezorging verplicht",
-        "modeRequiredDescription": "Bezorging is verplicht, geen ophaalmogelijkheid",
+        "modeRequiredDescription": "Bezorging en ophaling op het adres van de klant, geen afhalen of terugbrengen in de winkel",
         "modeIncluded": "Bezorging inbegrepen",
-        "modeIncludedDescription": "Bezorging is verplicht en gratis",
+        "modeIncludedDescription": "Bezorging en ophaling op het adres van de klant, gratis",
         "noCoordinatesWarning": "U moet uw winkeladres met kaartlocatie instellen om bezorging in te schakelen.",
         "noCoordinatesError": "Configureer eerst uw winkeladres met GPS-locatie.",
         "goToStoreSettings": "Adres invullen",
@@ -5380,6 +5714,7 @@
           "membershipsLeft": "U verlaat ook {count, plural, one {# andere winkel} other {# andere winkels}} waarvan u lid bent.",
           "businessDocumentsDeleted": "{count, plural, one {# bedrijfsfactuur van uw winkel wordt uit Louez verwijderd} other {# bedrijfsfacturen van uw winkels worden uit Louez verwijderd}}. Exporteer ze eerst als u ze moet bewaren.",
           "legalRetention": "{count, plural, one {# Louez-facturatiebewijs wordt} other {# Louez-facturatiebewijzen worden}} 10 jaar na afsluiting van het boekjaar bewaard in een afzonderlijk archief met beperkte toegang.",
+          "googleCalendarNotice": "Louez verwijdert de agenda die het in uw Google Agenda heeft aangemaakt. Geeft Google Louez daar geen toegang meer toe, dan blijft die agenda in uw Google-account staan en kunt u hem zelf verwijderen in Google Agenda.",
           "confirmationLabel": "Voer {email} in om te bevestigen",
           "passwordLabel": "Huidig wachtwoord",
           "passwordRequired": "Voer uw huidige wachtwoord in.",
@@ -5778,7 +6113,9 @@
           "defaultBadge": "Aanbevolen",
           "defaultVoice": "Aanbevolen stem",
           "title": "Kies de stem van je agent",
-          "description": "Beluister de stemmen en kies degene die je winkel aan de telefoon vertegenwoordigt."
+          "description": "Beluister de stemmen en kies degene die je winkel aan de telefoon vertegenwoordigt.",
+          "languageVoices": "Voor deze taal",
+          "allVoices": "Alle stemmen"
         },
         "setup": {
           "step1": "Kies je nummer",
@@ -5838,7 +6175,7 @@
         },
         "notConfigured": {
           "title": "Telefonie niet geconfigureerd",
-          "description": "De platformbeheerder moet een telefonieprovider configureren (AI_PHONE_ENABLED, VOICE_PROVIDER en de inloggegevens) om de spraakagent in te schakelen."
+          "description": "De telefonie of spraakdienst is nog niet volledig ingesteld. Neem contact op met de platformbeheerder om de agent te activeren."
         },
         "language": "Antwoordtaal",
         "languageDescription": "De taal waarin de assistent met bellers spreekt",
@@ -5868,7 +6205,10 @@
           "male": "Man"
         },
         "voicePreview": "Beluisteren",
-        "voiceRecommended": "Aanbevolen"
+        "voiceRecommended": "Aanbevolen",
+        "voiceMigrated": "Uw vorige stem is vervangen door de aanbevolen GPT-Live-stem. U kunt hieronder een andere kiezen.",
+        "voicePreviewError": "Het voorbeeld is momenteel niet beschikbaar. Probeer het zo opnieuw.",
+        "voicePreviewUnavailable": "Voorbeelden zijn beschikbaar zodra de spraakdienst is ingesteld."
       },
       "settingsNavigation": {
         "label": "Instellingennavigatie",
@@ -5895,8 +6235,7 @@
             "enableLabel": "reeent-kanaal inschakelen",
             "benefits": {
               "visibility": "Nieuwe klanten via de zoekfunctie van reeent.",
-              "seo": "Een eigen pagina voor je bedrijf, geïndexeerd door zoekmachines.",
-              "free": "Gratis bij de lancering, zonder commissie op je reserveringen."
+              "seo": "Een eigen pagina voor je bedrijf, geïndexeerd door zoekmachines."
             }
           },
           "storefront": {
@@ -5947,7 +6286,7 @@
             },
             "marketplaceTermsAccepted": {
               "label": "Marketplace-voorwaarden geaccepteerd",
-              "description": "De marketplace is gratis bij de lancering. De voorwaarden behouden het recht voor om later een commissie in te voeren op reserveringen die van de marketplace komen.",
+              "description": "De marketplacevoorwaarden gelden voor reserveringen via reeent, naast je Louez-aanbod.",
               "acceptedAt": "Geaccepteerd op {date}"
             }
           }
@@ -5990,13 +6329,478 @@
           "memberTitle": "reeent-aanbieding voor het leven — 0 € reeent-commissie",
           "memberRank": "Lid nr. {rank} van de lanceercohort",
           "incentiveBadge": "Lanceeraanbieding",
-          "incentiveLine": "nog {remaining} plaatsen met 0 € reeent-commissie voor het leven"
+          "incentiveLine": "nog {remaining} plaatsen met 0 € reeent-commissie voor het leven",
+          "dismiss": "Verbergen"
         }
       },
       "extensions": {
         "title": "Automatische huurverlengingen",
         "description": "Klanten kunnen verlengen bij beschikbaarheid en een berekenbare meerprijs. Bijzondere gevallen vereisen uw goedkeuring.",
         "maxDays": "Maximum extra dagen (leeg: geen limiet)"
+      },
+      "contractSignature": {
+        "title": "Ondertekening van het contract",
+        "description": "Wat er gebeurt als u een reservering als opgehaald markeert terwijl de klant zijn contract niet heeft ondertekend.",
+        "optional": "Optioneel",
+        "optionalDescription": "Geen waarschuwing bij het ophalen. Het label \"Contract niet ondertekend\" blijft zichtbaar op de reservering.",
+        "recommended": "Aanbevolen",
+        "recommendedDescription": "Een waarschuwing stelt voor om ter plaatse te laten ondertekenen. U kunt het materiaal zonder handtekening meegeven; dit wordt in de geschiedenis vermeld.",
+        "required": "Verplicht",
+        "requiredDescription": "Ophalen wordt geweigerd zolang het contract niet is ondertekend, online door de klant of ter plaatse."
+      },
+      "customerFields": {
+        "title": "Klantgegevens",
+        "native": {
+          "birthDate": "Geboortedatum",
+          "acquisitionSource": "Herkomst van de klant",
+          "socialLinks": "Sociale media en links"
+        },
+        "field": {
+          "add": "Veld toevoegen",
+          "delete": "Definitief verwijderen",
+          "drag": "Volgorde wijzigen"
+        },
+        "badges": {
+          "required": "Verplicht",
+          "sensitive": "Gevoelig",
+          "online": {
+            "optional": "Online · Optioneel",
+            "required": "Online · Verplicht"
+          },
+          "noTarget": "Geen product gekozen",
+          "hidden": "Verborgen",
+          "louez": "Louez-veld"
+        },
+        "dialog": {
+          "label": "Label",
+          "labelPlaceholder": "Rijbewijsnummer",
+          "options": "Keuzemogelijkheden",
+          "optionsPlaceholder": "Typ een keuze en druk op Enter",
+          "unit": "Eenheid",
+          "unitPlaceholder": "cm, kg, km…",
+          "helpText": "Hulptekst",
+          "helpTextPlaceholder": "Aanwijzing die onder het veld staat",
+          "appliesTo": "Geldt voor",
+          "appliesToAll": "Iedereen",
+          "appliesToIndividual": "Particulier",
+          "appliesToBusiness": "Zakelijk",
+          "types": {
+            "text": "Tekst",
+            "textarea": "Lange tekst",
+            "number": "Getal",
+            "date": "Datum",
+            "select": "Keuzelijst",
+            "checkbox": "Ja / Nee",
+            "phone": "Telefoon",
+            "email": "E-mail",
+            "url": "Link"
+          },
+          "flags": {
+            "requiredHelp": "Zonder dit veld kan de klant niet worden opgeslagen.",
+            "sensitive": "Gevoelig gegeven",
+            "sensitiveHelp": "Standaard verborgen bij de klant en niet opgenomen in exports.",
+            "contract": "Tonen op het contract",
+            "contractHelp": "Wordt toegevoegd onder de contactgegevens van de klant.",
+            "search": "Opnemen in de zoekfunctie",
+            "searchHelp": "Typ de waarde om de klant terug te vinden. Signaleert ook dubbelen.",
+            "list": "Tonen in de lijst",
+            "listHelp": "Voegt een kolom toe aan de klantenlijst.",
+            "requiredTeam": "Verplicht voor uw team",
+            "sensitiveItemHelp": "Standaard verborgen op de reservering.",
+            "contractItemHelp": "Wordt toegevoegd onder de regel van het gehuurde artikel."
+          },
+          "labelPlaceholderItem": "Schoenmaat",
+          "scopes": {
+            "customerDescription": "Eén waarde per klant: rijbewijs, identiteitsbewijs…",
+            "item": "Per gehuurd artikel",
+            "itemDescription": "Eén waarde per persoon of per stuk materiaal: lengte, schoenmaat…"
+          },
+          "online": {
+            "title": "Online reserveren",
+            "description": "Wat de klant invult bij het reserveren in uw winkel."
+          }
+        },
+        "templates": {
+          "dialogTitle": "Veldsjablonen",
+          "dialogDescription": "Voeg met één klik een set velden toe. Daarna kunt u ze hernoemen, anders ordenen of archiveren.",
+          "privacyNote": "Verzamel alleen wat u echt nodig hebt: u bent verantwoordelijk voor de gegevens van uw klanten.",
+          "groups": {
+            "country": "Per land",
+            "activity": "Per activiteit",
+            "general": "Algemeen"
+          },
+          "adopt": "Toevoegen",
+          "adopted": "Toegevoegd",
+          "fieldsCount": "{count, plural, one {# veld} other {# velden}}",
+          "adoptedToast": "{count, plural, one {# veld toegevoegd} other {# velden toegevoegd}}",
+          "identityDocument": {
+            "name": "Identiteitsbewijs",
+            "description": "Het bewijs dat bij de overdracht van het materiaal wordt gevraagd.",
+            "fields": {
+              "id_document_type": {
+                "label": "Type document",
+                "options": {
+                  "idCard": "Identiteitskaart",
+                  "passport": "Paspoort",
+                  "residencePermit": "Verblijfsvergunning",
+                  "drivingLicense": "Rijbewijs",
+                  "other": "Overig"
+                }
+              },
+              "id_document_number": {
+                "label": "Documentnummer"
+              },
+              "id_document_expiry": {
+                "label": "Vervaldatum"
+              }
+            }
+          },
+          "emergencyContact": {
+            "name": "Noodcontact",
+            "description": "De persoon die gewaarschuwd moet worden bij problemen tijdens de verhuur.",
+            "fields": {
+              "emergency_contact_name": {
+                "label": "Naam"
+              },
+              "emergency_contact_phone": {
+                "label": "Telefoon"
+              },
+              "emergency_contact_relation": {
+                "label": "Relatie tot de klant",
+                "options": {
+                  "partner": "Partner",
+                  "parent": "Ouder",
+                  "friend": "Vriend(in)",
+                  "colleague": "Collega",
+                  "other": "Overig"
+                }
+              }
+            }
+          },
+          "businessContacts": {
+            "name": "Zakelijke klanten",
+            "description": "De contactpersoon van de boekhouding en de referentie die op uw documenten moet staan.",
+            "fields": {
+              "accounting_contact_name": {
+                "label": "Contactpersoon boekhouding"
+              },
+              "accounting_email": {
+                "label": "E-mail boekhouding"
+              },
+              "purchase_order_reference": {
+                "label": "Referentie inkooporder"
+              }
+            }
+          },
+          "brazil": {
+            "name": "Brazilië",
+            "description": "CPF of CNPJ, met controle van het nummer, en RG.",
+            "fields": {
+              "br_cpf_cnpj": {
+                "label": "CPF / CNPJ"
+              },
+              "br_rg": {
+                "label": "RG"
+              },
+              "br_rg_issuer": {
+                "label": "Uitgevende instantie"
+              }
+            }
+          },
+          "spain": {
+            "name": "Spanje",
+            "description": "DNI of NIE, met controle van de controleletter.",
+            "fields": {
+              "es_dni_nie": {
+                "label": "DNI / NIE"
+              }
+            }
+          },
+          "italy": {
+            "name": "Italië",
+            "description": "Codice fiscale, met controle van het controleteken.",
+            "fields": {
+              "it_codice_fiscale": {
+                "label": "Codice fiscale"
+              }
+            }
+          },
+          "portugal": {
+            "name": "Portugal",
+            "description": "NIF, met controle van het controlecijfer.",
+            "fields": {
+              "pt_nif": {
+                "label": "NIF"
+              }
+            }
+          },
+          "vehicles": {
+            "name": "Voertuigen en tweewielers",
+            "description": "Het rijbewijs, overgenomen op het contract.",
+            "fields": {
+              "driving_license_number": {
+                "label": "Rijbewijsnummer"
+              },
+              "driving_license_date": {
+                "label": "Behaald op"
+              },
+              "driving_license_categories": {
+                "label": "Categorieën"
+              }
+            }
+          },
+          "ski": {
+            "name": "Ski en bergsport",
+            "description": "De lichaamsmaten om het materiaal klaar te zetten voordat de klant aankomt.",
+            "fields": {
+              "height_cm": {
+                "label": "Lengte"
+              },
+              "weight_kg": {
+                "label": "Gewicht"
+              },
+              "shoe_size": {
+                "label": "Schoenmaat"
+              },
+              "ski_level": {
+                "label": "Niveau",
+                "options": {
+                  "beginner": "Beginner",
+                  "intermediate": "Gemiddeld",
+                  "advanced": "Gevorderd",
+                  "expert": "Expert"
+                }
+              }
+            }
+          },
+          "bikes": {
+            "name": "Fietsen",
+            "description": "Wat u nodig hebt om de fiets af te stellen voordat de klant aankomt.",
+            "fields": {
+              "height_cm": {
+                "label": "Lengte"
+              },
+              "bike_saddle_height": {
+                "label": "Zadelhoogte"
+              },
+              "bike_preferences": {
+                "label": "Voorkeuren"
+              }
+            }
+          },
+          "boating": {
+            "name": "Watersport",
+            "description": "Het vaarbewijs, overgenomen op het contract.",
+            "fields": {
+              "boat_license_number": {
+                "label": "Nummer vaarbewijs"
+              },
+              "boat_license_type": {
+                "label": "Type vaarbewijs",
+                "options": {
+                  "coastal": "Kustwateren",
+                  "offshore": "Open zee",
+                  "inland": "Binnenwateren",
+                  "none": "Zonder vaarbewijs"
+                }
+              }
+            }
+          },
+          "perItem": "Per gehuurd artikel"
+        },
+        "deleteDialog": {
+          "title": "“{label}” verwijderen?",
+          "description": "Het veld verdwijnt bij alle klanten. Deze actie is onomkeerbaar.",
+          "withValues": "{count, plural, one {# klant heeft een waarde in dit veld: die wordt gewist.} other {# klanten hebben een waarde in dit veld: die worden gewist.}}",
+          "confirm": "Definitief verwijderen",
+          "cancel": "Annuleren",
+          "descriptionItem": "Het veld verdwijnt uit alle reserveringen. Deze actie is onomkeerbaar.",
+          "withItemValues": "{count, plural, one {# gehuurd artikel heeft een waarde in dit veld: die wordt gewist.} other {# gehuurde artikelen hebben een waarde in dit veld: die worden gewist.}}",
+          "hideInstead": "Liever verbergen"
+        },
+        "preview": {
+          "client": {
+            "previewFor": "Voorbeeld voor",
+            "noProduct": "Geen product gevonden",
+            "sampleProduct": "Gehuurd artikel",
+            "oneCardPerUnit": "Eén kaart per gehuurd artikel: twee fietsen, twee kaarten.",
+            "emptyProduct": "Voor dit product wordt de klant niets gevraagd.",
+            "emptyAll": "De klant wordt nog niets gevraagd.",
+            "emptyHint": "Zet “Vragen aan de klant” bij een veld op Optioneel of Verplicht om het hier te zien."
+          }
+        },
+        "toasts": {
+          "created": "Veld toegevoegd",
+          "deleted": "Veld verwijderd",
+          "hidden": "Veld verborgen"
+        },
+        "online": {
+          "collect": "Vragen aan de klant",
+          "collectModes": {
+            "never": "Nee",
+            "optional": "Optioneel",
+            "required": "Verplicht"
+          },
+          "collectHelp": {
+            "never": "Nee: alleen uw team ziet het.",
+            "customer": {
+              "optional": "Wordt aan de klant voorgesteld bij een online reservering.",
+              "required": "De klant moet het invullen om online te reserveren."
+            },
+            "item": {
+              "optional": "Wordt bij een online reservering voor elk gehuurd artikel voorgesteld.",
+              "required": "Moet voor elk gehuurd artikel worden ingevuld om online te reserveren."
+            }
+          },
+          "target": "Voor",
+          "targetModes": {
+            "all": "Alle reserveringen",
+            "products": "Bepaalde producten"
+          },
+          "targetHelp": {
+            "customer": {
+              "all": "Gevraagd bij elke online reservering.",
+              "products": "Alleen gevraagd als de winkelwagen een van deze producten bevat."
+            },
+            "item": {
+              "all": "Elk gehuurd artikel heeft dit veld, ongeacht het product.",
+              "products": "Alleen artikelen uit deze categorieën en producten hebben dit veld."
+            }
+          },
+          "targetsNone": "Geen product gekozen: dit veld geldt voor geen enkele reservering.",
+          "targetsPlaceholder": "Categorie of product…",
+          "targetsEmpty": "Geen resultaten",
+          "groups": {
+            "categories": "Categorieën",
+            "products": "Producten"
+          },
+          "productCount": "{count, plural, =0 {Geen producten} one {# product} other {# producten}}",
+          "productStatus": {
+            "draft": "Concept",
+            "archived": "Gearchiveerd"
+          },
+          "customerEditable": "De klant kan het wijzigen via het klantaccount",
+          "customerEditableHint": "Het veld staat in het klantaccount en kan daar worden bijgewerkt.",
+          "customerEditableNeverHint": "Beschikbaar zodra het veld aan de klant wordt gevraagd."
+        },
+        "sectionOnline": {
+          "adoptedTitle": "Voor welke producten?",
+          "adoptedDescription": "De velden “{section}” worden per gehuurd artikel vastgelegd. Kies de betreffende producten en vraag ze zo nodig aan de klant.",
+          "apply": "Toepassen",
+          "later": "Later"
+        },
+        "builder": {
+          "templates": {
+            "all": "Alle sjablonen bekijken"
+          },
+          "locked": {
+            "addressPlaceholder": "Straat, postcode, stad, land",
+            "label": "Onmisbaar veld",
+            "sheetNote": "Onmisbaar veld: altijd aanwezig in de klantgegevens. Alleen de plaats en de breedte zijn aan te passen."
+          },
+          "field": {
+            "select": "“{label}” bewerken",
+            "actions": "Acties voor het veld “{label}”",
+            "draftBadge": "Nieuw",
+            "draftPlaceholder": "Nieuw veld"
+          },
+          "item": {
+            "empty": "Lengte, schoenmaat, niveau… Voeg toe wat u moet weten om elk artikel klaar te zetten."
+          },
+          "inspector": {
+            "newTitle": "Nieuw veld",
+            "add": "Toevoegen",
+            "cancel": "Annuleren",
+            "close": "Sluiten",
+            "general": "Algemeen",
+            "advanced": "Geavanceerde opties",
+            "saving": "Opslaan…",
+            "saved": "Opgeslagen",
+            "format": "Formaat",
+            "formatHelp": "Louez controleert het ingevoerde nummer en zet het in het juiste formaat.",
+            "formatFreeHelp": "Elke tekst wordt geaccepteerd.",
+            "formats": {
+              "free": "Vrije tekst",
+              "br_cpf_cnpj": "CPF / CNPJ (Brazilië)",
+              "es_dni_nie": "DNI / NIE (Spanje)",
+              "it_codice_fiscale": "Codice fiscale (Italië)",
+              "pt_nif": "NIF (Portugal)"
+            }
+          },
+          "picker": {
+            "title": "Veld toevoegen",
+            "suggested": "Voorgestelde sjablonen",
+            "templates": "Sjablonen",
+            "examples": {
+              "customer": {
+                "text": "Rijbewijsnummer",
+                "textarea": "Opmerkingen over de klant",
+                "number": "Jaren ervaring",
+                "date": "Vervaldatum van het rijbewijs",
+                "select": "Type identiteitsbewijs",
+                "checkbox": "Afstandsverklaring ondertekend",
+                "phone": "Noodcontact",
+                "email": "E-mail voor facturatie",
+                "url": "Link naar een document"
+              },
+              "item": {
+                "text": "Kluisjesnummer",
+                "textarea": "Afstelvoorkeuren",
+                "number": "Lengte (cm)",
+                "date": "Geboortedatum van de fietser",
+                "select": "Niveau: beginner, gevorderd…",
+                "checkbox": "Kinderzitje",
+                "phone": "Telefoon van de deelnemer",
+                "email": "E-mail van de deelnemer",
+                "url": "Link naar de route"
+              }
+            }
+          },
+          "native": {
+            "fixed": "Louez-veld: de naam en het type liggen vast."
+          },
+          "visibility": {
+            "shown": {
+              "customer": "Tonen in de klantgegevens",
+              "item": "Tonen op de reservering"
+            },
+            "shownHint": {
+              "customer": "Uw team ziet het en vult het in bij elke klant.",
+              "item": "Uw team vult het in voor elk gehuurd artikel."
+            },
+            "hiddenHint": {
+              "customer": "Verborgen: niet meer zichtbaar in de klantgegevens. De waarden blijven bewaard.",
+              "item": "Verborgen: niet meer zichtbaar op de reserveringen. De waarden blijven bewaard."
+            }
+          },
+          "online": {
+            "hiddenNote": "Verborgen: het wordt niet aan de klant gevraagd. Toon het om het bij het reserveren voor te stellen."
+          },
+          "pageDescription": "De velden van uw klantgegevens, ingedeeld zoals uw formulieren ze tonen.",
+          "preview": {
+            "open": "Voorbeeld voor de klant",
+            "description": "Wat uw klanten invullen wanneer ze online reserveren."
+          },
+          "layout": {
+            "title": "Indeling"
+          },
+          "width": {
+            "label": "Breedte",
+            "full": "Volledig",
+            "half": "Half",
+            "fullLabel": "Volle breedte",
+            "halfLabel": "Halve breedte",
+            "hint": "Twee velden met halve breedte delen een rij.",
+            "fixed": "Dit veld beslaat altijd de hele rij."
+          },
+          "record": {
+            "customer": "In de klantgegevens",
+            "item": "Op de reservering"
+          },
+          "toasts": {
+            "applied": "Instellingen toegepast"
+          }
+        }
       }
     },
     "commandPalette": {
@@ -6081,6 +6885,7 @@
       "whatsNew": "Nieuw",
       "settings": "Instellingen",
       "settingsAdmin": "Administratie",
+      "settingsBilling": "Facturatie",
       "settingsApi": "API",
       "settingsAppearance": "Uiterlijk",
       "settingsDelivery": "Levering",
@@ -6098,7 +6903,8 @@
       "settingsReviewBooster": "Reviewbooster",
       "settingsTaxes": "Belastingen",
       "productsEdit": "Bewerken",
-      "reservationsEdit": "Bewerken"
+      "reservationsEdit": "Bewerken",
+      "settingsCustomerFields": "Klantgegevens"
     },
     "notificationsCenter": {
       "title": "Meldingen",
@@ -6190,6 +6996,10 @@
         "optional-password": {
           "title": "Een wachtwoord, als u dat wilt",
           "description": "Voeg een wachtwoord toe aan uw account om in te loggen zonder op de code per e-mail te wachten. De code blijft altijd beschikbaar."
+        },
+        "customer-custom-fields": {
+          "title": "Klantgegevens op uw maat",
+          "description": "Voeg uw eigen velden toe of begin met een sjabloon per land en per activiteit: rijbewijs, identiteitsbewijs, lichaamsmaten, CPF…"
         }
       }
     },
@@ -6313,6 +7123,17 @@
       "sourceHint": "Bekijk de broncode",
       "star": "Laat een ster achter",
       "later": "Later"
+    },
+    "reservationDetails": {
+      "itemDetails": {
+        "title": "Huurgegevens",
+        "incomplete": "Aan te vullen",
+        "empty": "Nog niets ingevuld",
+        "sheetDescription": "Wie elk artikel gebruikt en wat er klaargezet moet worden.",
+        "participantName": "Voor wie?",
+        "participantNamePlaceholder": "Voornaam",
+        "saved": "Huurgegevens opgeslagen"
+      }
     }
   },
   "storefront": {
@@ -6842,7 +7663,8 @@
         "contact": "Contact",
         "delivery": "Bezorging",
         "address": "Adres",
-        "confirm": "Bevestiging"
+        "confirm": "Bevestiging",
+        "details": "Huurgegevens"
       },
       "deliveryDescription": "Kies hoe u uw apparatuur wilt ontvangen en retourneren",
       "deliveryRequiredDescription": "Bezorging is verplicht voor deze bestelling",
@@ -7057,6 +7879,13 @@
         "title": "Uw bestelling kon niet worden verzonden",
         "goToStep": "Corrigeren"
       },
+      "storePaused": {
+        "title": "Online reserveren is gepauzeerd",
+        "description": "Deze winkel neemt op dit moment geen online reserveringen aan.",
+        "descriptionNamed": "{storeName} neemt op dit moment geen online reserveringen aan.",
+        "contactHint": "Neem rechtstreeks contact op met de winkel om deze data te boeken.",
+        "contactLater": "Probeer het iets later opnieuw."
+      },
       "payAmount": "{amount} betalen",
       "blocked": {
         "resolving": "Beschikbaarheid controleren…",
@@ -7105,6 +7934,10 @@
           "unavailable": "Online betalen is niet beschikbaar voor deze winkel.",
           "sessionFailed": "De betaling kon niet opnieuw worden gestart. Probeer het zo meteen opnieuw."
         }
+      },
+      "customFields": {
+        "savedSummary": "Gegevens al opgeslagen",
+        "detailsIntro": "Zo kan {store} uw materiaal klaarzetten."
       }
     },
     "confirmation": {
@@ -7153,6 +7986,8 @@
       "redirecting": "Doorverwijzen naar betaling...",
       "securePayment": "Veilige betaling via Stripe",
       "backToStore": "Terug naar winkel",
+      "acceptContractRich": "Ik heb de <terms>algemene huurvoorwaarden</terms> gelezen en ga ermee akkoord",
+      "acceptContractRequired": "Ga akkoord met de algemene huurvoorwaarden om verder te gaan.",
       "errors": {
         "expiredTitle": "Link verlopen",
         "expiredDescription": "Deze betalingslink is verlopen. Neem contact op met de verhuurder voor een nieuwe link.",
@@ -7317,7 +8152,7 @@
       "signContract": "Contract ondertekenen",
       "contractSigned": "Contract ondertekend",
       "downloadContract": "Contract downloaden",
-      "signContractConfirmation": "Door verder te gaan bevestigt u dat u deze huurovereenkomst hebt gelezen en aanvaard.",
+      "signContractConfirmation": "U gaat akkoord met het <contract>huurcontract</contract> en de algemene huurvoorwaarden. De datum en uw IP-adres worden vastgelegd.",
       "signContractError": "Het contract kon niet worden ondertekend. Probeer het opnieuw.",
       "invoiceDocuments": {
         "title": "Facturen en creditnota’s",
@@ -7653,6 +8488,17 @@
         "paymentDescription": "De winkel wordt op de hoogte gebracht. Heb je al betaald of een borg verstrekt, neem dan contact op met de winkel voor terugbetaling of vrijgave. Deze actie leidt niet tot een automatische terugbetaling.",
         "adminSubject": "Aanvraag #{number} geannuleerd door de klant",
         "adminBody": "{name} heeft reserveringsaanvraag #{number} geannuleerd voordat je deze bevestigde. Je kunt de geschiedenis in je dashboard bekijken."
+      },
+      "customerFields": {
+        "title": "Aanvullende gegevens",
+        "description": "Gevraagd door {store} bij uw reserveringen. Houd ze up-to-date, dan hoeft u ze niet opnieuw in te vullen."
+      },
+      "rentalDetails": {
+        "title": "Huurgegevens",
+        "editableHint": "U kunt ze wijzigen tot het begin van de huur.",
+        "toComplete": "Aan te vullen",
+        "saved": "Gegevens opgeslagen",
+        "saveError": "De gegevens konden niet worden opgeslagen. Controleer de velden en probeer het opnieuw."
       }
     },
     "marketplaceShell": {
@@ -7850,6 +8696,23 @@
       "breakdownTitle": "Prijs per seizoen",
       "from": "Vanaf",
       "averageRate": "Gemiddeld over je periode"
+    },
+    "customerFields": {
+      "optionalLabel": "{label} (optioneel)",
+      "sensitiveNote": "Alleen zichtbaar voor {store}, voor het afhandelen van de reservering.",
+      "suspicious": "Dit nummer lijkt ongeldig. Controleer het of ga toch verder.",
+      "participantLabel": "Voor wie?",
+      "participantPlaceholder": "Voornaam (optioneel)",
+      "unitCounter": "{index} / {count}",
+      "unitEmpty": "Niets ingevuld",
+      "recapValue": "{label}: {value}",
+      "profile": {
+        "title": "Profiel",
+        "birthDate": "Geboortedatum",
+        "acquisitionSource": "Hoe heeft u ons leren kennen?",
+        "acquisitionSourceDetail": "Toelichting",
+        "socialLinks": "Sociale media en links"
+      }
     }
   },
   "onboarding": {
@@ -8087,6 +8950,7 @@
           "quietMonth": "Een maand zonder verhuur: niets te betalen.",
           "subscription": "Een maandabonnement als je veel verhuurt.",
           "switch": "Je wisselt wanneer je wilt.",
+          "details": "Zodra je winkel is aangemaakt, vind je de details van je aanbod in de factuurinstellingen.",
           "individualNote": "Huurinkomsten geef je zelf op volgens je situatie; wordt het een beroepsactiviteit, dan vragen we je van status te wisselen."
         }
       }
@@ -8199,10 +9063,10 @@
       "customerText": "Ik erken dat ik de algemene huurvoorwaarden heb gelezen en ga zonder voorbehoud akkoord.",
       "dateLabel": "Datum:",
       "ipLabel": "IP:",
-      "automatic": "Automatisch bevestigd",
-      "automaticText": "Deze overeenkomst is automatisch bevestigd volgens de huurvoorwaarden.",
       "atBooking": "Ondertekend bij reservering",
       "atBookingText": "Algemene huurvoorwaarden geaccepteerd bij de online reservering, wat geldt als ondertekening van deze overeenkomst.",
+      "inStore": "Ter plaatse ondertekend",
+      "signerLabel": "Ondertekenaar:",
       "signedOnLabel": "Ondertekend op:",
       "validatedOnLabel": "Bevestigd op:"
     },
@@ -8323,7 +9187,10 @@
     }
   },
   "errors": {
+    "storeNotAcceptingReservations": "Deze winkel neemt op dit moment geen online reserveringen aan. {hasContact, select, yes {Neem contact op met de winkel: {contact}} other {Neem rechtstreeks contact op met de winkel.}}",
     "generic": "Er is een fout opgetreden",
+    "contractNotSignable": "Dit contract kan niet meer worden ondertekend.",
+    "contractSignatureRequired": "Deze winkel vereist dat de klant zijn contract ondertekent vóór het ophalen.",
     "pageLoadError": "We konden deze pagina niet laden. Probeer het opnieuw.",
     "notFound": "Pagina niet gevonden",
     "notFoundDescription": "De pagina die u zoekt bestaat niet of is verplaatst.",
@@ -8339,6 +9206,10 @@
     "integrationCategoryNotFound": "Integratiecategorie niet gevonden",
     "integrationNotConnected": "Integratie niet verbonden",
     "unsupportedOperation": "Niet-ondersteunde bewerking",
+    "planPaymentFailed": "Je kaart is geweigerd, dus het verschil kon niet worden afgeschreven. Je plan is niet gewijzigd. Werk je kaart bij via 'Mijn facturen bekijken' en probeer het opnieuw.",
+    "planPaymentConfirmationRequired": "Je bank vraagt om de betaling van het verschil te bevestigen, wat niet kan vanaf deze pagina. Je plan is niet gewijzigd. Voeg een andere kaart toe via 'Mijn facturen bekijken' en probeer het opnieuw, of neem contact op met support.",
+    "planNoPaymentMethod": "Er is geen kaart opgeslagen, dus het verschil kon niet worden afgeschreven. Je plan is niet gewijzigd. Voeg een kaart toe via 'Mijn facturen bekijken' en probeer het opnieuw.",
+    "planChangeNoLongerPending": "Deze planwijziging staat niet meer klaar: ze is al begonnen, of ze is geschrapt. De pagina toont nu je huidige plan.",
     "permissionDenied": "Onvoldoende rechten",
     "customerNotFound": "Klant niet gevonden",
     "reservationNotFound": "Reservering niet gevonden",
@@ -8377,7 +9248,7 @@
     "updateSettingsError": "Fout bij bijwerken instellingen",
     "createReservationError": "Fout bij aanmaken reservering",
     "businessHoursViolation": "Geselecteerde tijden vallen buiten de openingstijden van de winkel",
-    "returnAddressInvalid": "Ongeldige coordinaten retouradres",
+    "returnAddressInvalid": "Ongeldige coördinaten retouradres",
     "returnAddressRequired": "Voer een geldig retouradres in",
     "returnAddressTooFar": "Retouradres is te ver weg ({maxKm} km maximum)",
     "advanceNoticeViolation": "Reserveringen moeten minimaal {duration} van tevoren worden gemaakt",
@@ -8510,7 +9381,22 @@
     "requestCancellationPaymentChanged": "De betalingsinformatie is gewijzigd. Controleer deze voordat je de annulering opnieuw bevestigt.",
     "promoCodeProductsAlreadyDiscounted": "Deze code geldt niet voor producten die al in de aanbieding zijn.",
     "paymentAmountTooSmall": "Kaartbetalingen vereisen minimaal {minimumAmount, number} {currency}. Pas uw winkelwagen aan of neem contact op met de winkel.",
-    "checkoutPaymentFailed": "De betaling kon niet worden gestart. Uw reservering is niet bevestigd. Probeer het opnieuw of neem contact op met de winkel."
+    "checkoutPaymentFailed": "De betaling kon niet worden gestart. Uw reservering is niet bevestigd. Probeer het opnieuw of neem contact op met de winkel.",
+    "customFieldsInvalid": "Sommige aanvullende velden zijn ongeldig.",
+    "optionsRequired": "Voeg minstens één keuze toe.",
+    "customerFields": {
+      "tooManyFields": "U hebt het maximale aantal actieve velden bereikt. Archiveer er een om een nieuw veld toe te voegen.",
+      "tooManySearchable": "Er kunnen maximaal vijf velden in de zoekfunctie worden opgenomen.",
+      "tooManyListFields": "Er kunnen maximaal twee velden in de lijst worden getoond."
+    },
+    "customFieldRequired": "Vul „{field}” in.",
+    "customFieldInvalid": "„{field}” is ongeldig.",
+    "itemDetailRequired": "Vul „{field}” in voor {product} (nr. {unit}).",
+    "itemDetailInvalid": "„{field}” is ongeldig voor {product} (nr. {unit}).",
+    "reservationDetailsLocked": "Deze gegevens kunnen niet meer worden gewijzigd: de huur is begonnen of afgelopen.",
+    "customerNotAuthenticated": "Log in op uw klantaccount om verder te gaan.",
+    "profileFieldRequired": "Vul „{field}” in.",
+    "profileFieldInvalid": "„{field}” is ongeldig."
   },
   "welcome": {
     "greeting": "Welkom bij Louez.io",

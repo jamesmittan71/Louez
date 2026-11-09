@@ -1,18 +1,13 @@
 "use server";
 
-import {
-  checkExistingReservationInventory,
-  ReservationInventoryError,
-  lockReservationProducts,
-  reserveInventory,
-} from "@/lib/reservations/reserve-inventory";
+import { lockReservationProducts, reserveInventory } from "@/lib/reservations/reserve-inventory";
 
 import { validateReservationContract } from "@louez/api/services";
 
 import { resolveDateChangeRequests } from "@/lib/reservations/date-change-request.server";
 import { revalidatePath } from "next/cache";
 
-import { and, eq, inArray, not, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, not, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 import {
@@ -23,15 +18,16 @@ import {
 } from "@louez/api/services";
 import {
   ConsumableStockError,
-  canTransitionReservationStatus,
   consumeReservationStock,
   db,
   getEffectiveProductQuantities,
+  insertReservation,
+  isStoreNotAcceptingReservationsError,
   isStripeRefundPaymentSql,
   loadConsumableReservedQuantities,
+  markReservation,
   reconcileReservationStock,
   reservationStatusConsumesStock,
-  restoreReservationStock,
 } from "@louez/db";
 import { isEmailConfigured } from "@louez/email";
 import {
@@ -50,13 +46,13 @@ import {
   products,
   type Transaction,
   reservationActivity,
+  reservationItemDetails,
   reservationItemUnits,
   reservationItems,
   reservations,
   verificationCodes,
 } from "@louez/db";
-import type { NotificationEventType } from "@louez/types";
-import type { Rate } from "@louez/types";
+import { STORE_NOT_ACCEPTING_RESERVATIONS_ERROR, type Rate } from "@louez/types";
 import type {
   BookingAttributeAxis,
   DeliverySettings,
@@ -102,15 +98,9 @@ import {
 } from "@louez/validations";
 
 import { auth } from "@/lib/auth";
-import {
-  notifyEquipmentPickedUp,
-  notifyNewReservation,
-  notifyPaymentReceived,
-  notifyReservationCancelled,
-  notifyReservationCompleted,
-  notifyReservationConfirmed,
-  notifyReservationRejected,
-} from "@/lib/discord/platform-notifications";
+import { runReservationEffects } from "@/lib/billing/reservation-effects";
+import { checkReservationGate, logReservationGateRefusal } from "@/lib/billing/reservation-gate";
+import { notifyNewReservation, notifyPaymentReceived } from "@/lib/discord/platform-notifications";
 import { sendEmail } from "@/lib/email/client";
 import { getLocaleFromCountry } from "@/lib/email/i18n";
 import {
@@ -126,7 +116,6 @@ import {
   sendReservationModifiedEmail,
 } from "@/lib/email/send";
 import {
-  cancelTulipContractForReservation,
   createTulipContractForReservation,
   getTulipCoverageSummary,
   previewTulipQuoteForCheckout,
@@ -139,12 +128,6 @@ import {
 import { getDashboardTulipInsuranceModeFromSettings } from "@/lib/integrations/tulip/settings";
 import { resolveTulipIntegrationForStore } from "@/lib/integrations/tulip/state";
 import { dispatchCustomerNotification } from "@/lib/notifications/customer-dispatcher";
-import { dispatchNotification } from "@/lib/notifications/dispatcher";
-import {
-  recordMarketplaceFee,
-  recordReservationFee,
-  voidReservationFee,
-} from "@/lib/pay-as-you-go";
 import {
   captureProductServerEvent,
   captureReservationActionSucceeded,
@@ -154,9 +137,20 @@ import {
   productAnalyticsEvents,
   reservationAnalyticsActions,
 } from "@/lib/product-analytics/analytics-events";
-import { getReservationStatusAnalyticsAction } from "@/lib/product-analytics/reservation-analytics";
+import {
+  deleteRecordedPayment,
+  insertManualRefund,
+  insertRecordedPayment,
+  recordDepositCapture,
+  recordDepositHold,
+  recordDepositRelease,
+} from "@/lib/reservations/dashboard-payment-writes";
 import { resolveReservationLocationSnapshot } from "@/lib/reservations/location-snapshots";
-import { createReservationInstantAccessUrl } from "@/lib/reservations/instant-access";
+import { reservationCurrency } from "@/lib/reservations/payment-billing-facts";
+import {
+  cancelStoreReservation,
+  updateStoreReservationStatus,
+} from "@/lib/reservations/status-change";
 import { getRentalPaid } from "@/lib/reservations/util.payment-status";
 import {
   isSmsConfigured,
@@ -165,6 +159,8 @@ import {
   sendPaymentRequestSms,
 } from "@/lib/sms";
 import { getCurrentStore } from "@/lib/store-context";
+import { CONTRACT_SIGNATURE_REQUIRED_ERROR } from "@/lib/reservations/contract-signature-refusal";
+import { createReservationInstantAccessUrl } from "@/lib/reservations/instant-access";
 import { getStorefrontUrl } from "@/lib/storefront-url";
 import {
   tryEnsureRefundPaymentRecord,
@@ -404,18 +400,21 @@ async function getDashboardTulipInsuranceMode(storeId: string): Promise<TulipPub
   return getDashboardTulipInsuranceModeFromSettings(tulipSettings);
 }
 
+/** The signed-in user, for the activity rows they cause. */
+async function getActorUserId(): Promise<string | null> {
+  const session = await auth();
+  return session?.user?.id || null;
+}
+
 async function logReservationActivity(
   reservationId: string,
   activityType: ActivityType,
   metadata?: Record<string, unknown>,
 ) {
-  const session = await auth();
-  const userId = session?.user?.id || null;
-
   await db.insert(reservationActivity).values({
     id: nanoid(),
     reservationId,
-    userId,
+    userId: await getActorUserId(),
     activityType,
     metadata,
   });
@@ -436,6 +435,13 @@ async function generateReservationNumber(storeId: string): Promise<string> {
   return `${year}-${String(nextNumber).padStart(4, "0")}`;
 }
 
+/** The answer to a booking the card gate refused inside its transaction. */
+function refuseClosedGate(error: unknown) {
+  if (!isStoreNotAcceptingReservationsError(error)) throw error;
+  logReservationGateRefusal(error, "dashboard");
+  return { ok: false as const, error: STORE_NOT_ACCEPTING_RESERVATIONS_ERROR, shortfalls: [] };
+}
+
 export async function updateReservationStatus(
   reservationId: string,
   status: ReservationStatus,
@@ -446,348 +452,32 @@ export async function updateReservationStatus(
     return { error: "errors.unauthorized" };
   }
 
-  const reservation = await db.query.reservations.findFirst({
-    where: and(eq(reservations.id, reservationId), eq(reservations.storeId, store.id)),
-    with: {
-      customer: true,
-      items: true,
-    },
-  });
-
-  if (!reservation) {
-    return { error: "errors.reservationNotFound" };
-  }
-
-  const validationWarnings =
-    status === "confirmed"
-      ? evaluateReservationRules({
-          startDate: reservation.startDate,
-          endDate: reservation.endDate,
-          storeSettings: store.settings,
-        })
-      : [];
-
-  let previousStatus = reservation.status;
-  const updateData: Record<string, unknown> = {
+  const outcome = await updateStoreReservationStatus({
+    store,
+    reservationId,
     status,
-    updatedAt: new Date(),
-  };
-
-  // Set timestamps based on status transition
-  if (status === "ongoing") {
-    updateData.pickedUpAt = new Date();
-  } else if (status === "completed") {
-    updateData.returnedAt = new Date();
-  }
-
-  try {
-    const transitionResult = await db.transaction(
-      async (tx) => {
-        const [lockedReservation] = await tx
-          .select({ status: reservations.status })
-          .from(reservations)
-          .where(and(eq(reservations.id, reservationId), eq(reservations.storeId, store.id)))
-          .for("update");
-
-        if (!lockedReservation) {
-          throw new ConsumableStockError({
-            code: "RESERVATION_NOT_FOUND",
-            message: "errors.reservationNotFound",
-          });
-        }
-
-        if (lockedReservation.status !== reservation.status) {
-          return { ok: false as const, error: "errors.reservationStatusChanged" as const };
-        }
-
-        if (!canTransitionReservationStatus(lockedReservation.status, status)) {
-          return { ok: false as const, error: "errors.reservationStatusChanged" as const };
-        }
-
-        if (
-          status === "confirmed" &&
-          (lockedReservation.status === "pending" || lockedReservation.status === "quote")
-        ) {
-          await checkExistingReservationInventory(tx, reservationId, store.id);
-          await consumeReservationStock(tx, reservationId, store.id);
-        } else if (
-          (status === "cancelled" || status === "rejected") &&
-          (lockedReservation.status === "confirmed" || lockedReservation.status === "ongoing")
-        ) {
-          await restoreReservationStock(tx, reservationId, store.id);
-        }
-
-        await tx
-          .update(reservations)
-          .set(updateData)
-          .where(and(eq(reservations.id, reservationId), eq(reservations.storeId, store.id)));
-
-        await validateReservationContract(tx, reservationId, store.id, "confirmation");
-        await resolveDateChangeRequests(
-          tx,
-          reservationId,
-          reservation.startDate,
-          reservation.endDate,
-          status,
-        );
-        return { ok: true as const, previousStatus: lockedReservation.status };
-      },
-      { isolationLevel: "read committed" },
-    );
-
-    if (!transitionResult.ok) {
-      return { error: transitionResult.error };
+    rejectionReason,
+    actor: "store_user",
+    actorUserId: await getActorUserId(),
+  });
+  if (!outcome.ok) {
+    if (outcome.error === "unavailable") return { error: outcome.message };
+    if (outcome.error === "store_not_accepting_reservations") {
+      return { error: STORE_NOT_ACCEPTING_RESERVATIONS_ERROR };
     }
-    previousStatus = transitionResult.previousStatus;
-  } catch (error) {
-    if (error instanceof ConsumableStockError || error instanceof ReservationInventoryError) {
-      return { error: error.message };
-    }
-    throw error;
-  }
-
-  // Log activity based on status transition
-  const activityMap: Record<string, ActivityType> = {
-    confirmed: "confirmed",
-    rejected: "rejected",
-    ongoing: "picked_up",
-    completed: "returned",
-  };
-
-  if (activityMap[status]) {
-    await logReservationActivity(reservationId, activityMap[status], {
-      previousStatus,
-      newStatus: status,
-      ...(status === "rejected" && rejectionReason && { rejectionReason }),
-      ...(validationWarnings.length > 0 && {
-        validationWarnings,
-        validationWarningsCount: validationWarnings.length,
-      }),
-    });
-  }
-
-  // Pay-as-you-go metering (no-op for subscription stores). Record the fee when a
-  // rental becomes billable; void it on ANY transition away from a billable state
-  // (rejected/cancelled/declined/back-to-quote) so a withdrawn rental is never invoiced.
-  const BILLABLE_STATUSES = ["confirmed", "ongoing", "completed"];
-  try {
-    if (BILLABLE_STATUSES.includes(status) && !BILLABLE_STATUSES.includes(previousStatus)) {
-      await Promise.all([
-        recordReservationFee({
-          storeId: store.id,
-          reservationId,
-          source: "manual",
-        }),
-        ...(reservation.source === "marketplace"
-          ? [
-              recordMarketplaceFee({
-                storeId: store.id,
-                reservationId,
-                source: "manual",
-              }),
-            ]
-          : []),
-      ]);
-    } else if (BILLABLE_STATUSES.includes(previousStatus) && !BILLABLE_STATUSES.includes(status)) {
-      await voidReservationFee(reservationId);
-    }
-  } catch (error) {
-    console.error("[payg] metering on status change failed:", {
-      reservationId,
-      status,
-      error,
-    });
-  }
-
-  let tulipWarning: {
-    key: string;
-    params?: Record<string, string | number>;
-  } | null = null;
-  if (status === "confirmed") {
-    try {
-      await createTulipContractForReservation({
-        reservationId,
-        source: "dashboard_reservation_confirmation",
-      });
-    } catch (error) {
-      console.error("[tulip] Failed to create contract from dashboard confirmation:", {
-        reservationId,
-        error,
-      });
-
-      tulipWarning = {
-        key: getErrorKey(error, "errors.tulipContractCreationFailed"),
-      };
-    }
-  }
-
-  // Send emails based on status change
-  const reservationUrl = getStorefrontUrl(store.slug, `/account/reservations/${reservationId}`);
-
-  // Build customer notification context
-  const customerNotificationCtx = {
-    store: {
-      id: store.id,
-      name: store.name,
-      email: store.email,
-      logoUrl: store.logoUrl,
-      darkLogoUrl: store.darkLogoUrl,
-      address: store.address,
-      phone: store.phone,
-      theme: store.theme,
-      settings: store.settings,
-      emailSettings: store.emailSettings,
-      customerNotificationSettings: store.customerNotificationSettings,
-    },
-    customer: {
-      id: reservation.customer.id,
-      firstName: reservation.customer.firstName,
-      lastName: reservation.customer.lastName,
-      email: reservation.customer.email,
-      phone: reservation.customer.phone,
-    },
-    reservation: {
-      id: reservationId,
-      number: reservation.number,
-      startDate: reservation.startDate,
-      endDate: reservation.endDate,
-      totalAmount: parseFloat(reservation.totalAmount),
-      subtotalAmount: parseFloat(reservation.subtotalAmount),
-      depositAmount: parseFloat(reservation.depositAmount),
-      taxEnabled: !!reservation.taxRate,
-      taxRate: reservation.taxRate ? parseFloat(reservation.taxRate) : null,
-      subtotalExclTax: reservation.subtotalExclTax ? parseFloat(reservation.subtotalExclTax) : null,
-      taxAmount: reservation.taxAmount ? parseFloat(reservation.taxAmount) : null,
-    },
-    reservationUrl,
-  };
-
-  // Dispatch customer notification based on status change
-  if ((previousStatus === "pending" || previousStatus === "quote") && status === "confirmed") {
-    // Request/quote accepted - build items for email
-    const emailItems = reservation.items.map((item) => ({
-      name: item.productSnapshot?.name || "Product",
-      quantity: item.quantity,
-      unitPrice: parseFloat(item.unitPrice),
-      totalPrice: parseFloat(item.totalPrice),
-    }));
-
-    try {
-      const contractUrl = await createReservationInstantAccessUrl({
-        storeId: store.id,
-        storeSlug: store.slug,
-        customerEmail: reservation.customer.email,
-        reservationId,
-        redirectPath: `/account/reservations/${reservationId}/contract`,
-      });
-      const termsUrl = store.cgv?.trim() ? getStorefrontUrl(store.slug, "/terms") : null;
-
-      dispatchCustomerNotification("customer_request_accepted", {
-        ...customerNotificationCtx,
-        items: emailItems,
-        contractUrl,
-        termsUrl,
-        paymentUrl: null,
-      }).catch((error: unknown) => {
-        console.error("Failed to dispatch customer request accepted notification:", error);
-      });
-    } catch (error) {
-      console.error("Failed to dispatch customer request accepted notification:", error);
-    }
-  } else if (status === "rejected") {
-    // Request rejected
-    dispatchCustomerNotification("customer_request_rejected", {
-      ...customerNotificationCtx,
-      reason: rejectionReason,
-    }).catch((error: unknown) => {
-      console.error("Failed to dispatch customer request rejected notification:", error);
-    });
-  }
-
-  // Dispatch admin notifications (SMS, Discord) based on preferences
-  const notificationEventMap: Record<string, NotificationEventType> = {
-    confirmed: "reservation_confirmed",
-    rejected: "reservation_rejected",
-    ongoing: "reservation_picked_up",
-    completed: "reservation_completed",
-  };
-
-  const eventType = notificationEventMap[status];
-  if (eventType) {
-    dispatchNotification(eventType, {
-      store: {
-        id: store.id,
-        name: store.name,
-        email: store.email,
-        discordWebhookUrl: store.discordWebhookUrl,
-        ownerPhone: store.ownerPhone,
-        notificationSettings: store.notificationSettings,
-        settings: store.settings,
-      },
-      reservation: {
-        id: reservationId,
-        number: reservation.number,
-        startDate: reservation.startDate,
-        endDate: reservation.endDate,
-        totalAmount: parseFloat(reservation.totalAmount),
-      },
-      customer: {
-        firstName: reservation.customer.firstName,
-        lastName: reservation.customer.lastName,
-        email: reservation.customer.email,
-        phone: reservation.customer.phone,
-      },
-    }).catch((error) => {
-      console.error("Failed to dispatch admin notification:", error);
-    });
-  }
-
-  // Platform admin notification
-  const storeInfo = { id: store.id, name: store.name, slug: store.slug };
-  const currency = store.settings?.currency;
-  if (status === "confirmed") {
-    notifyReservationConfirmed(storeInfo, reservation.number).catch(() => {});
-  } else if (status === "rejected") {
-    notifyReservationRejected(storeInfo, reservation.number).catch(() => {});
-  } else if (status === "ongoing") {
-    notifyEquipmentPickedUp(storeInfo, reservation.number).catch(() => {});
-  } else if (status === "completed") {
-    notifyReservationCompleted(
-      storeInfo,
-      reservation.number,
-      parseFloat(reservation.totalAmount),
-      currency,
-    ).catch(() => {});
-  }
-
-  revalidatePath("/dashboard/reservations");
-  revalidatePath(`/dashboard/reservations/${reservationId}`);
-  const responseWarnings = [
-    ...validationWarnings.map((warning) => ({
-      key: warning.key,
-      params: warning.params,
-    })),
-    ...(tulipWarning ? [tulipWarning] : []),
-  ];
-
-  const analyticsAction = getReservationStatusAnalyticsAction(status);
-  if (analyticsAction) {
-    await captureReservationActionSucceeded({
-      distinctId: store.userId,
-      storeId: store.id,
-      reservationId,
-      action: analyticsAction,
-      properties: {
-        status_before: previousStatus,
-        status_after: status,
-        warning_count: responseWarnings.length,
-      },
-    });
+    if (outcome.error === "contract_unsigned") return { error: CONTRACT_SIGNATURE_REQUIRED_ERROR };
+    // A stale read, a retry of the same change and a refused change get one answer.
+    return {
+      error:
+        outcome.error === "not_found" || outcome.refusal.reason === "not_found"
+          ? "errors.reservationNotFound"
+          : "errors.reservationStatusChanged",
+    };
   }
 
   return {
     success: true,
-    ...(responseWarnings.length > 0 && { warnings: responseWarnings }),
+    ...(outcome.warnings.length > 0 && { warnings: outcome.warnings }),
   };
 }
 
@@ -797,148 +487,19 @@ export async function cancelReservation(reservationId: string) {
     return { error: "errors.unauthorized" };
   }
 
-  const reservation = await db.query.reservations.findFirst({
-    where: and(eq(reservations.id, reservationId), eq(reservations.storeId, store.id)),
-    with: {
-      customer: true,
-    },
-  });
-
-  if (!reservation) {
-    return { error: "errors.reservationNotFound" };
-  }
-
-  let previousStatus = reservation.status;
-  try {
-    type CancellationResult =
-      | { cancelled: false }
-      | {
-          cancelled: true;
-          previousStatus: typeof reservations.$inferSelect.status;
-        };
-    const cancellation = await db.transaction(async (tx): Promise<CancellationResult> => {
-      const [lockedReservation] = await tx
-        .select({ status: reservations.status })
-        .from(reservations)
-        .where(and(eq(reservations.id, reservationId), eq(reservations.storeId, store.id)))
-        .for("update");
-
-      if (
-        !lockedReservation ||
-        ["cancelled", "completed", "rejected", "declined"].includes(lockedReservation.status)
-      ) {
-        return { cancelled: false };
-      }
-
-      if (lockedReservation.status === "confirmed" || lockedReservation.status === "ongoing") {
-        await restoreReservationStock(tx, reservationId, store.id);
-      }
-
-      await tx
-        .update(reservations)
-        .set({
-          status: "cancelled",
-          updatedAt: new Date(),
-        })
-        .where(and(eq(reservations.id, reservationId), eq(reservations.storeId, store.id)));
-
-      await resolveDateChangeRequests(
-        tx,
-        reservationId,
-        reservation.startDate,
-        reservation.endDate,
-        "cancelled",
-      );
-      return {
-        cancelled: true,
-        previousStatus: lockedReservation.status,
-      };
-    });
-
-    if (!cancellation.cancelled) {
-      return { error: "errors.cannotCancelReservation" };
-    }
-    previousStatus = cancellation.previousStatus;
-  } catch (error) {
-    if (error instanceof ConsumableStockError) {
-      return { error: error.message };
-    }
-    throw error;
-  }
-
-  // Log activity
-  await logReservationActivity(reservationId, "cancelled", {
-    previousStatus,
-  });
-
-  // Pay-as-you-go: drop the (not-yet-billed) commission for this rental.
-  try {
-    await voidReservationFee(reservationId);
-  } catch (error) {
-    console.error("[payg] Failed to void usage on cancellation:", {
-      reservationId,
-      error,
-    });
-  }
-
-  if (reservation.tulipContractId) {
-    try {
-      await cancelTulipContractForReservation({ reservationId });
-    } catch (error) {
-      console.error("[tulip] Failed to cancel contract from dashboard cancellation:", {
-        reservationId,
-        contractId: reservation.tulipContractId,
-        error,
-      });
-    }
-  }
-
-  // Dispatch admin notifications (SMS, Discord) based on preferences
-  dispatchNotification("reservation_cancelled", {
-    store: {
-      id: store.id,
-      name: store.name,
-      email: store.email,
-      discordWebhookUrl: store.discordWebhookUrl,
-      ownerPhone: store.ownerPhone,
-      notificationSettings: store.notificationSettings,
-      settings: store.settings,
-    },
-    reservation: {
-      id: reservationId,
-      number: reservation.number,
-      startDate: reservation.startDate,
-      endDate: reservation.endDate,
-      totalAmount: parseFloat(reservation.totalAmount),
-    },
-    customer: {
-      firstName: reservation.customer.firstName,
-      lastName: reservation.customer.lastName,
-      email: reservation.customer.email,
-      phone: reservation.customer.phone,
-    },
-  }).catch((error) => {
-    console.error("Failed to dispatch cancellation notification:", error);
-  });
-
-  // Platform admin notification
-  notifyReservationCancelled(
-    { id: store.id, name: store.name, slug: store.slug },
-    reservation.number,
-  ).catch(() => {});
-
-  revalidatePath("/dashboard/reservations");
-  revalidatePath(`/dashboard/reservations/${reservationId}`);
-  await captureReservationActionSucceeded({
-    distinctId: store.userId,
-    storeId: store.id,
+  const outcome = await cancelStoreReservation({
+    store,
     reservationId,
-    action: reservationAnalyticsActions.cancelReservation,
-    properties: {
-      status_before: reservation.status,
-      status_after: "cancelled",
-    },
+    actor: "store_user",
+    actorUserId: await getActorUserId(),
   });
+  if (!outcome.ok) {
+    if (outcome.error === "not_found") return { error: "errors.reservationNotFound" };
+    if (outcome.error === "unavailable") return { error: outcome.message };
+    // Gone, or already cancelled, completed, rejected or declined.
+    return { error: "errors.cannotCancelReservation" };
+  }
+
   return { success: true };
 }
 
@@ -1064,6 +625,13 @@ export async function createManualReservation(data: CreateReservationData) {
     return { error: "errors.unauthorized" };
   }
 
+  // A booking created as confirmed asks the card gate (README §8.4) before it writes a
+  // new customer or calls the routing API. insertReservation asks again under the
+  // transaction, and that answer is the one that counts.
+  if (!data.sendAsQuote && !(await checkReservationGate(store.id, "dashboard")).accepts) {
+    return { error: STORE_NOT_ACCEPTING_RESERVATIONS_ERROR };
+  }
+
   let customerId = data.customerId;
 
   // Create new customer if needed
@@ -1084,6 +652,7 @@ export async function createManualReservation(data: CreateReservationData) {
         firstName: data.newCustomer.firstName,
         lastName: data.newCustomer.lastName,
         phone: data.newCustomer.phone || null,
+        createdVia: "dashboard",
       });
       customerId = newCustomerId;
     }
@@ -1492,7 +1061,7 @@ export async function createManualReservation(data: CreateReservationData) {
   const quoteTaxById = new Map(quoteTax.lines.map((line) => [line.id, line]));
   const totalAmount = quoteTax.totalAmount;
 
-  // Create reservation
+  // Create reservation. Created as confirmed, insertReservation asks the card gate.
   const reservationId = nanoid();
   const reservationWriteResult = await db.transaction(async (tx) => {
     const requestedProductIds = [...new Set(productDetails.map((detail) => detail.product.id))];
@@ -1779,12 +1348,14 @@ export async function createManualReservation(data: CreateReservationData) {
       };
     }
 
-    await tx.insert(reservations).values({
+    const { effects } = await insertReservation(tx, {
       id: reservationId,
       storeId: store.id,
       customerId,
       number: reservationNumber,
       status: data.sendAsQuote ? "quote" : "confirmed",
+      // Frozen at creation: the store can change its currency later (billing contract Q4).
+      currency: reservationCurrency(null, store.settings),
       startDate: data.startDate,
       endDate: data.endDate,
       subtotalAmount: subtotalAmount.toFixed(2),
@@ -1911,8 +1482,9 @@ export async function createManualReservation(data: CreateReservationData) {
     return {
       ok: true as const,
       overbookingShortfalls: shortfalls,
+      effects,
     };
-  });
+  }).catch(refuseClosedGate);
 
   if (!reservationWriteResult.ok) {
     return {
@@ -1920,6 +1492,10 @@ export async function createManualReservation(data: CreateReservationData) {
       shortfalls: reservationWriteResult.shortfalls,
     };
   }
+
+  // Right after commit: a reservation created as confirmed records its
+  // pay-as-you-go fee. A quote records it when it is accepted.
+  await runReservationEffects(reservationWriteResult.effects);
 
   const overbookingShortfalls =
     reservationWriteResult.overbookingShortfalls.length > 0
@@ -1974,23 +1550,6 @@ export async function createManualReservation(data: CreateReservationData) {
       currency: store.settings?.currency ?? "EUR",
     },
   });
-
-  // Pay-as-you-go: a manually created reservation that is immediately confirmed
-  // counts as a billable location (quotes are billed when later accepted).
-  if (!data.sendAsQuote) {
-    try {
-      await recordReservationFee({
-        storeId: store.id,
-        reservationId,
-        source: "manual",
-      });
-    } catch (error) {
-      console.error("[payg] Failed to record manual reservation location:", {
-        reservationId,
-        error,
-      });
-    }
-  }
 
   try {
     await createTulipContractForReservation({
@@ -2090,27 +1649,39 @@ export async function createManualReservation(data: CreateReservationData) {
         console.error("Failed to send quote email:", error);
       });
     } else {
-      // Send confirmation email
+      // Send confirmation email. A reservation made in the dashboard is never signed yet,
+      // so the email carries a link that signs the customer in to sign it.
       const reservationUrl = getStorefrontUrl(store.slug, `/account/reservations/${reservationId}`);
-      sendReservationConfirmationEmail({
-        to: customer.email,
-        store: storeData,
-        customer: customerData,
-        reservation: {
-          id: reservationId,
-          number: reservationNumber,
-          startDate: data.startDate,
-          endDate: data.endDate,
-          subtotalAmount,
-          depositAmount,
-          totalAmount,
-        },
-        items: emailItems,
-        reservationUrl,
-        locale: getLocaleFromCountry(store.settings?.country),
-      }).catch((error) => {
-        console.error("Failed to send reservation confirmation email:", error);
-      });
+      const customerEmail = customer.email;
+      createReservationInstantAccessUrl({
+        storeId: store.id,
+        storeSlug: store.slug,
+        customerEmail,
+        reservationId,
+      })
+        .then((contractSignatureUrl) =>
+          sendReservationConfirmationEmail({
+            to: customerEmail,
+            store: storeData,
+            customer: customerData,
+            reservation: {
+              id: reservationId,
+              number: reservationNumber,
+              startDate: data.startDate,
+              endDate: data.endDate,
+              subtotalAmount,
+              depositAmount,
+              totalAmount,
+            },
+            items: emailItems,
+            reservationUrl,
+            contractSignatureUrl,
+            locale: getLocaleFromCountry(store.settings?.country),
+          }),
+        )
+        .catch((error) => {
+          console.error("Failed to send reservation confirmation email:", error);
+        });
     }
   }
 
@@ -2280,6 +1851,36 @@ type ReservationItemUpdateValues = Pick<
 type ReservationItemWrite =
   | { type: "insert"; values: ReservationItemInsertValues }
   | { type: "update"; id: string; values: ReservationItemUpdateValues };
+
+// Delivery columns only: the reservation update spreads these, and a status
+// written there would skip changeReservationStatus (DL-12).
+type ReservationDeliveryUpdateValues = Partial<
+  Pick<
+    typeof reservations.$inferInsert,
+    | "outboundMethod"
+    | "pickupLocationId"
+    | "pickupLocationSnapshot"
+    | "deliveryAddress"
+    | "deliveryCity"
+    | "deliveryPostalCode"
+    | "deliveryCountry"
+    | "deliveryLatitude"
+    | "deliveryLongitude"
+    | "deliveryDistanceKm"
+    | "returnMethod"
+    | "returnLocationId"
+    | "returnLocationSnapshot"
+    | "returnAddress"
+    | "returnCity"
+    | "returnPostalCode"
+    | "returnCountry"
+    | "returnLatitude"
+    | "returnLongitude"
+    | "returnDistanceKm"
+    | "deliveryFee"
+    | "deliveryOption"
+  >
+>;
 
 function normalizeMoney(value: string | number) {
   const parsed = typeof value === "number" ? value : parseFloat(value);
@@ -3296,7 +2897,7 @@ export async function updateReservation(
 
   // Process delivery changes
   let deliveryFee = parseFloat(reservation.deliveryFee || "0");
-  const deliveryUpdateFields: Record<string, unknown> = {};
+  const deliveryUpdateFields: ReservationDeliveryUpdateValues = {};
 
   if (data.delivery) {
     const deliverySettings = (store.settings as Record<string, unknown> | null)?.delivery as
@@ -3405,10 +3006,10 @@ export async function updateReservation(
     // Calculate delivery fee
     if (deliverySettings?.enabled) {
       const outDist = deliveryUpdateFields.deliveryDistanceKm
-        ? parseFloat(deliveryUpdateFields.deliveryDistanceKm as string)
+        ? parseFloat(deliveryUpdateFields.deliveryDistanceKm)
         : null;
       const retDist = deliveryUpdateFields.returnDistanceKm
-        ? parseFloat(deliveryUpdateFields.returnDistanceKm as string)
+        ? parseFloat(deliveryUpdateFields.returnDistanceKm)
         : null;
 
       if (deliverySettings.mode === "included") {
@@ -3839,6 +3440,16 @@ export async function updateReservation(
               .update(reservationItems)
               .set(itemWrite.values)
               .where(eq(reservationItems.id, itemWrite.id));
+            // Fewer units leave fewer people to equip: their details go too, or
+            // raising the quantity again would bring them back.
+            await tx
+              .delete(reservationItemDetails)
+              .where(
+                and(
+                  eq(reservationItemDetails.reservationItemId, itemWrite.id),
+                  gte(reservationItemDetails.unitIndex, itemWrite.values.quantity),
+                ),
+              );
           }
         }
 
@@ -3939,6 +3550,8 @@ export async function updateReservation(
             updatedAt: new Date(),
           })
           .where(and(eq(reservations.id, reservationId), eq(reservations.storeId, store.id)));
+        // Dates, totals, items, insurance and delivery are in the billing snapshot.
+        await markReservation(tx, { id: reservationId, storeId: store.id });
 
         await validateReservationContract(tx, reservationId, store.id, "confirmation");
         await resolveDateChangeRequests(
@@ -4161,13 +3774,15 @@ export async function recordPayment(reservationId: string, data: RecordPaymentDa
 
   const paymentId = nanoid();
   await db.transaction(async (tx) => {
-    await tx.insert(payments).values({
+    await insertRecordedPayment(tx, {
       id: paymentId,
       reservationId,
+      storeId: store.id,
+      storeSettings: store.settings,
       amount: data.amount.toFixed(2),
       type: data.type,
       method: data.method,
-      status: "completed",
+      origin: "manual",
       paidAt: data.paidAt || new Date(),
       notes: data.notes || null,
     });
@@ -4240,9 +3855,11 @@ export async function refundManualPayment(reservationId: string, data: RefundMan
           id: payments.id,
           amount: payments.amount,
           type: payments.type,
+          method: payments.method,
           status: payments.status,
           currency: payments.currency,
           refundOfPaymentId: payments.refundOfPaymentId,
+          reservationCurrency: reservations.currency,
         })
         .from(payments)
         .innerJoin(reservations, eq(reservations.id, payments.reservationId))
@@ -4291,20 +3908,18 @@ export async function refundManualPayment(reservationId: string, data: RefundMan
       }
 
       const paymentId = nanoid();
-      const paidAt = new Date();
-      await tx.insert(payments).values({
+      await insertManualRefund(tx, {
         id: paymentId,
         reservationId,
+        storeId: store.id,
+        storeSettings: store.settings,
+        reservationCurrency: originalPayment.reservationCurrency,
+        original: originalPayment,
         amount: data.amount.toFixed(2),
         type: originalPayment.type === "deposit_capture" ? "deposit_return" : "rental",
         method: data.method,
-        status: "completed",
-        refundOfPaymentId: originalPayment.id,
-        currency: originalPayment.currency,
         notes: data.notes?.trim() || null,
-        paidAt,
-        createdAt: paidAt,
-        updatedAt: paidAt,
+        paidAt: new Date(),
       });
 
       return paymentId;
@@ -4367,7 +3982,11 @@ export async function deletePayment(paymentId: string) {
     return { error: "errors.cannotDeleteStripePayment" };
   }
 
-  await db.delete(payments).where(eq(payments.id, paymentId));
+  await deleteRecordedPayment(db, {
+    paymentId,
+    reservationId: payment.reservationId,
+    storeId: store.id,
+  });
 
   // Log activity
   await logReservationActivity(payment.reservationId, "payment_updated", {
@@ -4436,16 +4055,20 @@ export async function returnDeposit(reservationId: string, data: ReturnDepositDa
   }
 
   const paymentId = nanoid();
-  await db.insert(payments).values({
-    id: paymentId,
-    reservationId,
-    amount: data.amount.toFixed(2),
-    type: "deposit_return",
-    method: data.method,
-    status: "completed",
-    paidAt: new Date(),
-    notes: data.notes || null,
-  });
+  await db.transaction((tx) =>
+    insertRecordedPayment(tx, {
+      id: paymentId,
+      reservationId,
+      storeId: store.id,
+      storeSettings: store.settings,
+      amount: data.amount.toFixed(2),
+      type: "deposit_return",
+      method: data.method,
+      origin: "deposit",
+      paidAt: new Date(),
+      notes: data.notes || null,
+    }),
+  );
 
   // Log activity
   await logReservationActivity(reservationId, "payment_added", {
@@ -4492,16 +4115,20 @@ export async function recordDamage(
   }
 
   const paymentId = nanoid();
-  await db.insert(payments).values({
-    id: paymentId,
-    reservationId,
-    amount: data.amount.toFixed(2),
-    type: "damage",
-    method: data.method,
-    status: "completed",
-    paidAt: new Date(),
-    notes: data.notes,
-  });
+  await db.transaction((tx) =>
+    insertRecordedPayment(tx, {
+      id: paymentId,
+      reservationId,
+      storeId: store.id,
+      storeSettings: store.settings,
+      amount: data.amount.toFixed(2),
+      type: "damage",
+      method: data.method,
+      origin: "manual",
+      paidAt: new Date(),
+      notes: data.notes,
+    }),
+  );
 
   await tryGenerateInvoiceForPayment(paymentId, "dashboard_record_damage");
 
@@ -4589,13 +4216,14 @@ export async function createDepositHold(reservationId: string) {
   }
 
   const currency = store.settings?.currency || "EUR";
+  const amountMinor = toStripeCents(depositAmount, currency);
 
   try {
     const result = await createDepositAuthorization({
       stripeAccountId: store.stripeAccountId,
       customerId: reservation.stripeCustomerId,
       paymentMethodId: reservation.stripePaymentMethodId,
-      amount: toStripeCents(depositAmount, currency),
+      amount: amountMinor,
       currency,
       reservationId,
       reservationNumber: reservation.number,
@@ -4622,31 +4250,18 @@ export async function createDepositHold(reservationId: string) {
       return { error: "errors.stripe.authorizationFailed" };
     }
 
-    // Update reservation
-    await db
-      .update(reservations)
-      .set({
-        depositStatus: "authorized",
-        depositPaymentIntentId: result.paymentIntentId,
-        depositAuthorizationExpiresAt: result.expiresAt,
-        updatedAt: new Date(),
-      })
-      .where(eq(reservations.id, reservationId));
-
-    // Create payment record
-    await db.insert(payments).values({
-      id: nanoid(),
+    await recordDepositHold(db, {
+      paymentId: nanoid(),
       reservationId,
+      storeId: store.id,
+      stripeAccountId: store.stripeAccountId,
+      paymentIntentId: result.paymentIntentId,
+      paymentMethodId: reservation.stripePaymentMethodId,
+      expiresAt: result.expiresAt,
       amount: depositAmount.toFixed(2),
-      type: "deposit_hold",
-      method: "stripe",
-      status: "authorized",
-      stripePaymentIntentId: result.paymentIntentId,
-      stripePaymentMethodId: reservation.stripePaymentMethodId,
-      authorizationExpiresAt: result.expiresAt,
+      amountMinor,
       currency,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      now: new Date(),
     });
 
     // Log activity
@@ -4737,52 +4352,19 @@ export async function captureDepositHold(
       amountToCapture: toStripeCents(data.amount, currency),
     });
 
-    // Update reservation
-    await db
-      .update(reservations)
-      .set({
-        depositStatus: "captured",
-        updatedAt: new Date(),
-      })
-      .where(eq(reservations.id, reservationId));
-
-    // Update the deposit_hold payment
-    const depositPayment = await db.query.payments.findFirst({
-      where: and(
-        eq(payments.reservationId, reservationId),
-        eq(payments.type, "deposit_hold"),
-        eq(payments.status, "authorized"),
-      ),
-    });
-
-    if (depositPayment) {
-      await db
-        .update(payments)
-        .set({
-          status: "completed",
-          capturedAmount: data.amount.toFixed(2),
-          notes: data.reason,
-          paidAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(payments.id, depositPayment.id));
-    }
-
-    // Create deposit_capture payment record
     const capturePaymentId = nanoid();
-    await db.insert(payments).values({
-      id: capturePaymentId,
+    await recordDepositCapture(db, {
+      capturePaymentId,
       reservationId,
+      storeId: store.id,
+      stripeAccountId: store.stripeAccountId,
+      paymentIntentId: reservation.depositPaymentIntentId,
+      stripeChargeId: result.chargeId,
       amount: data.amount.toFixed(2),
-      type: "deposit_capture",
-      method: "stripe",
-      status: "completed",
-      stripePaymentIntentId: reservation.depositPaymentIntentId,
-      currency,
-      notes: data.reason,
-      paidAt: new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      capturedMinor: result.amountCaptured,
+      currency: result.currency,
+      reason: data.reason,
+      now: new Date(),
     });
 
     await tryGenerateInvoiceForPayment(capturePaymentId, "dashboard_capture_deposit_hold");
@@ -4843,33 +4425,7 @@ export async function releaseDepositHold(reservationId: string) {
       paymentIntentId: reservation.depositPaymentIntentId,
     });
 
-    // Update reservation
-    await db
-      .update(reservations)
-      .set({
-        depositStatus: "released",
-        updatedAt: new Date(),
-      })
-      .where(eq(reservations.id, reservationId));
-
-    // Update the deposit_hold payment
-    const depositPayment = await db.query.payments.findFirst({
-      where: and(
-        eq(payments.reservationId, reservationId),
-        eq(payments.type, "deposit_hold"),
-        eq(payments.status, "authorized"),
-      ),
-    });
-
-    if (depositPayment) {
-      await db
-        .update(payments)
-        .set({
-          status: "cancelled",
-          updatedAt: new Date(),
-        })
-        .where(eq(payments.id, depositPayment.id));
-    }
+    await recordDepositRelease(db, { reservationId, storeId: store.id, now: new Date() });
 
     // Log activity
     const currency = store.settings?.currency || "EUR";
@@ -4994,6 +4550,7 @@ export async function processStripeRefund(reservationId: string, data: ProcessSt
         originalPaymentId: stripePayment.id,
         stripeRefundId: refund.refundId,
         amount: data.amount,
+        grossMinor: refund.amount,
         type: data.type === "deposit_return" ? "deposit_return" : "rental",
         currency: refund.currency,
         notes: data.notes,

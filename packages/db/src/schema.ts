@@ -1,8 +1,9 @@
-import type { ProductPromotion } from "@louez/types";
+import type { CustomerFieldValues, CustomerSocialLinks, ProductPromotion } from "@louez/types";
 import { relations } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  customType,
   date,
   decimal,
   foreignKey,
@@ -12,6 +13,7 @@ import {
   longtext,
   mysqlEnum,
   mysqlTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -45,7 +47,7 @@ import type {
   StoreTheme,
   UnitAttributes,
 } from "@louez/types";
-import type { PayAsYouGoConfig } from "@louez/types";
+import type { PayAsYouGoConfig, PricingVersion } from "@louez/types";
 
 // Helper for generating IDs
 const id = () =>
@@ -91,6 +93,9 @@ export const users = mysqlTable("users", {
   // Set once the user has been through the "introduce yourself" onboarding
   // step. Google users get a prefilled name but still confirm it once.
   profileCompletedAt: timestamp("profile_completed_at", { mode: "date" }),
+  // Informational dashboard notices the user closed for good (ids from
+  // apps/web/lib/dashboard/dismissed-notices.ts). `null` until the first one.
+  dismissedNotices: json("dismissed_notices").$type<string[]>(),
   reeentIntroAcknowledgedAt: timestamp("reeent_intro_acknowledged_at", {
     mode: "date",
   }),
@@ -143,10 +148,41 @@ export const sessions = mysqlTable(
   }),
 );
 
+// WebAuthn credential IDs are base64url, case-sensitive, and can exceed 255 chars.
+// ASCII keeps the unique index below MySQL's 3072-byte index limit.
+const credentialId = customType<{ data: string }>({
+  dataType: () => "varchar(2048) CHARACTER SET ascii COLLATE ascii_bin",
+});
+
+export const passkeyTable = mysqlTable(
+  "passkey",
+  {
+    id: id(),
+    name: varchar("name", { length: 100 }),
+    publicKey: text("public_key").notNull(),
+    userId: varchar("user_id", { length: 21 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    credentialID: credentialId("credential_id").notNull(),
+    counter: bigint("counter", { mode: "number", unsigned: true }).notNull(),
+    deviceType: varchar("device_type", { length: 32 }).notNull(),
+    backedUp: boolean("backed_up").notNull(),
+    transports: varchar("transports", { length: 255 }),
+    aaguid: varchar("aaguid", { length: 36 }),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => [
+    unique("passkey_credential_id_unique").on(table.credentialID),
+    index("passkey_user_id_idx").on(table.userId),
+  ],
+);
+
 export const verification = mysqlTable("verification", {
   id: id(),
   identifier: varchar("identifier", { length: 255 }).notNull(),
-  value: varchar("value", { length: 255 }).notNull(),
+  // Passkey challenges include the user data and can exceed 255 characters.
+  value: text("value").notNull(),
   expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow(),
@@ -195,8 +231,14 @@ export const subscriptions = mysqlTable(
       .default("pay_as_you_go")
       .notNull(),
 
-    // Per-store pay-as-you-go pricing override. null => platform default ladder.
+    // The store's own pay-as-you-go pricing, frozen when the store is created. Changing
+    // the offer for new stores never touches it. Null only on
+    // legacy rows that the pricing freeze has not reached yet.
     payAsYouGoConfig: json("pay_as_you_go_config").$type<PayAsYouGoConfig>(),
+
+    // Pricing model of the store (see PricingVersion). Every new row sets it; null only on
+    // legacy rows the pricing freeze has not reached yet, so it stays nullable for now.
+    pricingVersion: varchar("pricing_version", { length: 32 }).$type<PricingVersion>(),
 
     // Welcome allowance: number of free reservations granted at account creation. While
     // unused credits remain, a rental's pay-as-you-go commission is waived. Editable per
@@ -1199,6 +1241,31 @@ export const customers = mysqlTable(
     postalCode: varchar("postal_code", { length: 20 }),
     country: varchar("country", { length: 2 }).default("FR"),
 
+    // Profile
+    birthDate: date("birth_date", { mode: "string" }),
+    // How the customer heard about the store, as declared by the merchant.
+    acquisitionSource: mysqlEnum("acquisition_source", [
+      "word_of_mouth",
+      "search_engine",
+      "social_media",
+      "walk_in",
+      "partner",
+      "ads",
+      "returning",
+      "other",
+    ]),
+    acquisitionSourceDetail: varchar("acquisition_source_detail", { length: 255 }),
+    // Where the record was created. Set by the code path, never by input.
+    createdVia: mysqlEnum("created_via", [
+      "dashboard",
+      "storefront",
+      "marketplace",
+      "import",
+      "api",
+      "ai",
+    ]),
+    socialLinks: json("social_links").$type<CustomerSocialLinks>(),
+
     // Internal notes
     notes: text("notes"),
 
@@ -1209,8 +1276,128 @@ export const customers = mysqlTable(
   (table) => ({
     uniqueEmailPerStore: unique("customers_unique_email_per_store").on(table.storeId, table.email),
     storeIdx: index("customers_store_idx").on(table.storeId),
+    storeCreatedIdx: index("customers_store_created_idx").on(table.storeId, table.createdAt),
     emailIdx: index("customers_email_idx").on(table.email),
     marketplaceUserIdx: index("customers_marketplace_user_idx").on(table.marketplaceUserId),
+  }),
+);
+
+// ============================================================================
+// Customer custom fields (store-level definitions, per-customer values)
+// ============================================================================
+
+export const customerFieldDefinitions = mysqlTable(
+  "customer_field_definitions",
+  {
+    id: id(),
+    storeId: varchar("store_id", { length: 21 }).notNull(),
+    // Stable identity: a template adopted twice resolves to the same row, and
+    // values survive a relabel.
+    key: varchar("key", { length: 64 }).notNull(),
+    label: varchar("label", { length: 100 }).notNull(),
+    type: mysqlEnum("field_type", [
+      "text",
+      "textarea",
+      "number",
+      "date",
+      "select",
+      "checkbox",
+      "phone",
+      "email",
+      "url",
+    ]).notNull(),
+    // Known identifier format of a text field (validation + normalisation).
+    format: varchar("format", { length: 32 }),
+    options: json("options").$type<string[]>(),
+    unit: varchar("unit", { length: 32 }),
+    helpText: varchar("help_text", { length: 255 }),
+    // No longer read or written: fields form one ordered list. Kept so no data is lost.
+    section: varchar("section", { length: 100 }).notNull(),
+    // One numeric space with the Louez fields' positions in stores.settings.customerFormLayout.
+    position: int("position").notNull().default(0),
+    // A whole form row, or half of one next to another field.
+    width: mysqlEnum("width", ["full", "half"]).notNull().default("full"),
+    appliesTo: mysqlEnum("applies_to", ["all", "individual", "business"]).notNull().default("all"),
+    isRequired: boolean("is_required").notNull().default(false),
+    isSensitive: boolean("is_sensitive").notNull().default(false),
+    showOnContract: boolean("show_on_contract").notNull().default(false),
+    isSearchable: boolean("is_searchable").notNull().default(false),
+    showInList: boolean("show_in_list").notNull().default(false),
+    // Template the field was adopted from, when any.
+    templateKey: varchar("template_key", { length: 64 }),
+    isActive: boolean("is_active").notNull().default(true),
+    // Where a value lives: on the customer record, or per rented unit on the
+    // reservation (reservation_item_details). Fixed at creation, like the type.
+    scope: mysqlEnum("scope", ["customer", "item"]).notNull().default("customer"),
+    // Whether the storefront checkout asks it: never means team only.
+    collectMode: mysqlEnum("collect_mode", ["never", "optional", "required"])
+      .notNull()
+      .default("never"),
+    // `products` limits the field to the targets in customer_field_targets.
+    targetMode: mysqlEnum("target_mode", ["all", "products"]).notNull().default("all"),
+    // The customer sees and updates it from their storefront account.
+    customerEditable: boolean("customer_editable").notNull().default(false),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    storeIdx: index("customer_field_definitions_store_idx").on(table.storeId, table.position),
+    uniqueStoreKey: unique("customer_field_definitions_store_key_unique").on(
+      table.storeId,
+      table.key,
+    ),
+  }),
+);
+
+export const customerFieldValues = mysqlTable(
+  "customer_field_values",
+  {
+    id: id(),
+    // Denormalised so a lookup by value is a store-scoped index seek.
+    storeId: varchar("store_id", { length: 21 }).notNull(),
+    customerId: varchar("customer_id", { length: 21 }).notNull(),
+    definitionId: varchar("definition_id", { length: 21 }).notNull(),
+    value: varchar("value", { length: 2000 }).notNull(),
+    // Lowercased, punctuation stripped. Only set for searchable definitions.
+    searchValue: varchar("search_value", { length: 191 }),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueCustomerDefinition: unique("customer_field_values_customer_definition_unique").on(
+      table.customerId,
+      table.definitionId,
+    ),
+    storeSearchIdx: index("customer_field_values_store_search_idx").on(
+      table.storeId,
+      table.searchValue,
+    ),
+    definitionIdx: index("customer_field_values_definition_idx").on(table.definitionId),
+  }),
+);
+
+/**
+ * Products and categories a definition is limited to when its target mode is
+ * `products`. Rows are replaced as a whole, never updated.
+ */
+export const customerFieldTargets = mysqlTable(
+  "customer_field_targets",
+  {
+    id: id(),
+    storeId: varchar("store_id", { length: 21 }).notNull(),
+    definitionId: varchar("definition_id", { length: 21 }).notNull(),
+    targetType: mysqlEnum("target_type", ["category", "product"]).notNull(),
+    targetId: varchar("target_id", { length: 21 }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueDefinitionTarget: unique("customer_field_targets_definition_target_unique").on(
+      table.definitionId,
+      table.targetType,
+      table.targetId,
+    ),
+    storeIdx: index("customer_field_targets_store_idx").on(table.storeId),
+    targetIdx: index("customer_field_targets_target_idx").on(table.targetId),
   }),
 );
 
@@ -1275,6 +1462,16 @@ export const depositStatus = mysqlEnum("deposit_status", [
   "failed", // Authorization failed
 ]);
 
+// Where the customer accepted the contract: in the checkout, on the payment page, from
+// their account, or in store on the renter's device (with a drawn signature).
+export const CONTRACT_SIGNATURE_METHODS = [
+  "checkout",
+  "payment_page",
+  "account",
+  "in_store",
+] as const;
+export type ContractSignatureMethod = (typeof CONTRACT_SIGNATURE_METHODS)[number];
+
 export const reservations = mysqlTable(
   "reservations",
   {
@@ -1310,9 +1507,13 @@ export const reservations = mysqlTable(
     taxAmount: decimal("tax_amount", { precision: 10, scale: 2 }),
     taxRate: decimal("tax_rate", { precision: 5, scale: 2 }),
 
-    // Signature
+    // The customer's acceptance of the contract: at checkout, on the payment page, from
+    // their account, or in store on the renter's device. Never set by a status change.
     signedAt: timestamp("signed_at", { mode: "date" }),
     signatureIp: varchar("signature_ip", { length: 50 }),
+    signatureMethod: varchar("signature_method", { length: 20 }).$type<ContractSignatureMethod>(),
+    // When the contract became final, on confirmation or payment. Not a customer signature.
+    contractValidatedAt: timestamp("contract_validated_at", { mode: "date" }),
 
     // Deposit (caution) management
     depositStatus: depositStatus.default("pending"),
@@ -1326,6 +1527,13 @@ export const reservations = mysqlTable(
     // Tracking
     pickedUpAt: timestamp("picked_up_at", { mode: "date" }),
     returnedAt: timestamp("returned_at", { mode: "date" }),
+    // First time the reservation entered a billable status (confirmed, ongoing, completed).
+    billableAt: timestamp("billable_at", { mode: "date" }),
+    // When a billable reservation was cancelled. Null while it stays billable.
+    withdrawnAt: timestamp("withdrawn_at", { mode: "date" }),
+    // The reservation's currency, frozen at creation (billing contract Q4). Null for
+    // rows created before it existed; readers fall back to the store's currency.
+    currency: varchar("currency", { length: 3 }),
 
     // Notes
     customerNotes: text("customer_notes"),
@@ -1399,6 +1607,7 @@ export const reservations = mysqlTable(
     customerIdx: index("reservations_customer_idx").on(table.customerId),
     statusIdx: index("reservations_status_idx").on(table.status),
     dateIdx: index("reservations_date_idx").on(table.startDate, table.endDate),
+    billableAtIdx: index("reservations_billable_at_idx").on(table.billableAt),
   }),
 );
 
@@ -1550,6 +1759,35 @@ export const payments = mysqlTable(
     refundOfPaymentId: varchar("refund_of_payment_id", { length: 21 }),
     stripePaymentMethodId: varchar("stripe_payment_method_id", { length: 255 }),
 
+    // Billing facts (billing contract Q3, Q5, Q7, Q36). Written when the payment is
+    // created and never changed: the amount column is netted by refunds, these are not.
+    grossMinor: bigint("gross_minor", { mode: "number" }),
+    insuranceShareMinor: bigint("insurance_share_minor", { mode: "number" }),
+    origin: mysqlEnum("origin", [
+      "checkout",
+      "customer_session",
+      "payment_request",
+      "extension",
+      "deposit",
+      "manual",
+    ]),
+    paymentRequestId: varchar("payment_request_id", { length: 21 }),
+    stripeAccountId: varchar("stripe_account_id", { length: 255 }),
+    // What Louez asked Stripe to take at source (fee metadata v4, or v3 for older
+    // sessions). The billing service reads the real fee from Stripe.
+    appFeeTotalMinor: bigint("app_fee_total_minor", { mode: "number" }),
+    appFeeReservationMinor: bigint("app_fee_reservation_minor", { mode: "number" }),
+    appFeeMarketplaceMinor: bigint("app_fee_marketplace_minor", { mode: "number" }),
+    appFeeBaseMinor: bigint("app_fee_base_minor", { mode: "number" }),
+    appFeePolicyScope: mysqlEnum("app_fee_policy_scope", [
+      "store",
+      "default",
+      "fail_closed",
+      "legacy",
+    ]),
+    appFeePolicyVersion: int("app_fee_policy_version"),
+    appFeeMetadataVersion: int("app_fee_metadata_version"),
+
     // Authorization hold (empreinte)
     authorizationExpiresAt: timestamp("authorization_expires_at", {
       mode: "date",
@@ -1574,6 +1812,137 @@ export const payments = mysqlTable(
       table.stripeCheckoutSessionId,
     ),
     refundOfPaymentIdx: index("payments_refund_of_payment_idx").on(table.refundOfPaymentId),
+  }),
+);
+
+// ============================================================================
+// Billing sync (M1). Louez's side of the contract with the private billing service
+// (louez-billing docs/api). Written only in cloud mode with BILLING_SERVICE_URL set.
+// ============================================================================
+
+/** Payment disputes Stripe reported on a store's connected account (contract Q15). */
+export const paymentDisputes = mysqlTable(
+  "payment_disputes",
+  {
+    // The Stripe dispute id.
+    id: varchar("id", { length: 255 }).primaryKey(),
+    paymentId: varchar("payment_id", { length: 21 }).notNull(),
+    reservationId: varchar("reservation_id", { length: 21 }).notNull(),
+    amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
+    currency: varchar("currency", { length: 3 }).notNull(),
+    // Mapped from Stripe: needs_response and under_review are open.
+    status: mysqlEnum("status", ["open", "won", "lost"]).notNull(),
+    stripeStatus: varchar("stripe_status", { length: 32 }).notNull(),
+    // When Stripe withdrew the funds. Null for inquiries, which are never sent.
+    openedAt: timestamp("opened_at", { mode: "date" }),
+    closedAt: timestamp("closed_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    paymentIdx: index("payment_disputes_payment_idx").on(table.paymentId),
+    reservationIdx: index("payment_disputes_reservation_idx").on(table.reservationId),
+  }),
+);
+
+/**
+ * One row per aggregate the billing service holds a snapshot of. A mark bumps
+ * `version` and makes the row pending; the relay sends the snapshot (contract §5).
+ */
+export const billingSyncQueue = mysqlTable(
+  "billing_sync_queue",
+  {
+    aggregateType: mysqlEnum("aggregate_type", [
+      "store",
+      "reservation",
+      "legacy_store",
+      "legacy_month",
+    ]).notNull(),
+    // A store or reservation id, or `{storeId}:{YYYY-MM}` for legacy_month.
+    aggregateId: varchar("aggregate_id", { length: 40 }).notNull(),
+    storeId: varchar("store_id", { length: 21 }).notNull(),
+    version: int("version", { unsigned: true }).default(1).notNull(),
+    // The last version the service acknowledged, reported in manifests (Q23).
+    deliveredVersion: int("delivered_version", { unsigned: true }).default(0).notNull(),
+    // SHA-256 of the canonical data last sent. A forced mark clears it.
+    sentHash: varchar("sent_hash", { length: 64 }),
+    // The closing snapshot written during account deletion (PR c).
+    finalPayload: json("final_payload"),
+    status: mysqlEnum("status", ["pending", "synced", "dead"]).default("pending").notNull(),
+    attemptCount: int("attempt_count", { unsigned: true }).default(0).notNull(),
+    failingSince: timestamp("failing_since", { mode: "date", fsp: 3 }),
+    nextAttemptAt: timestamp("next_attempt_at", { mode: "date", fsp: 3 }).defaultNow().notNull(),
+    lastError: varchar("last_error", { length: 1000 }),
+    markedAt: timestamp("marked_at", { mode: "date", fsp: 3 }).defaultNow().notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.aggregateType, table.aggregateId] }),
+    dueIdx: index("billing_sync_queue_due_idx").on(table.status, table.nextAttemptAt),
+    storeIdx: index("billing_sync_queue_store_idx").on(table.storeId, table.status),
+  }),
+);
+
+/** One row (id 1): the relay's and the heartbeat's own state. */
+export const billingSyncState = mysqlTable("billing_sync_state", {
+  id: int("id").primaryKey(),
+  lastRelayOkAt: timestamp("last_relay_ok_at", { mode: "date", fsp: 3 }),
+  consecutiveFailures: int("consecutive_failures").default(0).notNull(),
+  // Runs in a row that failed with a 5xx or a timeout while /health answered 200.
+  serverErrorRuns: int("server_error_runs").default(0).notNull(),
+  singleEventMode: boolean("single_event_mode").default(false).notNull(),
+  retryAfterUntil: timestamp("retry_after_until", { mode: "date", fsp: 3 }),
+  lastHeartbeatOkAt: timestamp("last_heartbeat_ok_at", { mode: "date", fsp: 3 }),
+  policiesEtag: varchar("policies_etag", { length: 64 }),
+  lastPolicyPullAt: timestamp("last_policy_pull_at", { mode: "date", fsp: 3 }),
+  lastSweepAt: timestamp("last_sweep_at", { mode: "date", fsp: 3 }),
+  // Set by `pnpm billing:gross-backfill --apply` once it has filled gross_minor of the
+  // older payments. While it is null, the heartbeat sends completedPaymentsWithoutGross
+  // as null (Q7).
+  grossBackfilledAt: timestamp("gross_backfilled_at", { mode: "date", fsp: 3 }),
+  // Resync request ids of the last heartbeat response, listed as handled next time.
+  pendingRequestIds: json("pending_request_ids").$type<string[]>(),
+  // Alert kind → last time a Discord message was sent for it.
+  alerts: json("alerts").$type<Record<string, string>>(),
+  lastError: varchar("last_error", { length: 1000 }),
+  updatedAt: timestamp("updated_at", { mode: "date", fsp: 3 }).defaultNow().notNull(),
+});
+
+/** Resync requests Louez handled, kept 7 days so a repeat is not marked again. */
+export const billingSyncHandledRequests = mysqlTable("billing_sync_handled_requests", {
+  requestId: varchar("request_id", { length: 64 }).primaryKey(),
+  handledAt: timestamp("handled_at", { mode: "date", fsp: 3 }).defaultNow().notNull(),
+});
+
+/** Manifests Louez owes the service, per store and period (contract §7.3). */
+export const billingSyncManifests = mysqlTable(
+  "billing_sync_manifests",
+  {
+    storeId: varchar("store_id", { length: 21 }).notNull(),
+    period: varchar("period", { length: 7 }).notNull(),
+    requestedAt: timestamp("requested_at", { mode: "date", fsp: 3 }).defaultNow().notNull(),
+    sentAt: timestamp("sent_at", { mode: "date", fsp: 3 }),
+    answeredAt: timestamp("answered_at", { mode: "date", fsp: 3 }),
+    status: varchar("status", { length: 16 }),
+    lastError: varchar("last_error", { length: 1000 }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.storeId, table.period] }),
+  }),
+);
+
+/** Every policy version received from the service, append-only (contract §8.1). */
+export const billingPolicies = mysqlTable(
+  "billing_policies",
+  {
+    // A store id or `*` for the default policy of new stores.
+    storeId: varchar("store_id", { length: 32 }).notNull(),
+    version: int("version", { unsigned: true }).notNull(),
+    effectiveFrom: timestamp("effective_from", { mode: "date", fsp: 3 }).notNull(),
+    body: json("body").notNull(),
+    receivedAt: timestamp("received_at", { mode: "date", fsp: 3 }).defaultNow().notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.storeId, table.version] }),
   }),
 );
 
@@ -1612,6 +1981,7 @@ export const activityType = mysqlEnum("activity_type", [
   "inspection_signed", // Customer signed the inspection
   "quote_accepted", // Customer accepted a quote
   "quote_declined", // Customer declined a quote
+  "contract_signed", // Customer accepted the rental contract
 ]);
 
 export const reservationActivity = mysqlTable(
@@ -1633,6 +2003,15 @@ export const reservationActivity = mysqlTable(
     userIdx: index("reservation_activity_user_idx").on(table.userId),
   }),
 );
+
+// A signature drawn in store, kept apart so reservation lists never load the image.
+export const reservationContractSignatures = mysqlTable("reservation_contract_signatures", {
+  id: id(),
+  reservationId: varchar("reservation_id", { length: 21 }).notNull().unique(),
+  signerName: varchar("signer_name", { length: 255 }).notNull(),
+  image: longtext("image").notNull(), // PNG data URL
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
 
 export const documents = mysqlTable("documents", {
   id: id(),
@@ -2135,6 +2514,11 @@ export const usersRelations = relations(users, ({ many }) => ({
   memberships: many(storeMembers),
   accounts: many(accounts),
   sessions: many(sessions),
+  passkeys: many(passkeyTable),
+}));
+
+export const passkeyRelations = relations(passkeyTable, ({ one }) => ({
+  user: one(users, { fields: [passkeyTable.userId], references: [users.id] }),
 }));
 
 export const accountsRelations = relations(accounts, ({ one }) => ({
@@ -2663,6 +3047,56 @@ export const reservationItemUnitsRelations = relations(reservationItemUnits, ({ 
 }));
 
 // ============================================================================
+// Reservation Item Details (item-scope custom field values, per rented unit)
+// ============================================================================
+
+/**
+ * What was recorded for one rented unit (`unit_index` 0..quantity-1): who
+ * uses it and the values of item-scope custom fields. JSON because the block
+ * is always read and written whole, never filtered in SQL; keys without a
+ * live definition are ignored by readers.
+ */
+export const reservationItemDetails = mysqlTable(
+  "reservation_item_details",
+  {
+    id: id(),
+    storeId: varchar("store_id", { length: 21 }).notNull(),
+    reservationId: varchar("reservation_id", { length: 21 }).notNull(),
+    reservationItemId: varchar("reservation_item_id", { length: 21 }).notNull(),
+    unitIndex: int("unit_index").notNull(),
+    participantName: varchar("participant_name", { length: 100 }),
+    values: json("values").$type<CustomerFieldValues>().notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueItemUnit: unique("reservation_item_details_item_unit_unique").on(
+      table.reservationItemId,
+      table.unitIndex,
+    ),
+    reservationIdx: index("reservation_item_details_reservation_idx").on(table.reservationId),
+    storeIdx: index("reservation_item_details_store_idx").on(table.storeId),
+    // A line removed from a reservation takes what was recorded for it along.
+    reservationItemFk: foreignKey({
+      name: "rid_reservation_item_fk",
+      columns: [table.reservationItemId],
+      foreignColumns: [reservationItems.id],
+    }).onDelete("cascade"),
+  }),
+);
+
+export const reservationItemDetailsRelations = relations(reservationItemDetails, ({ one }) => ({
+  reservation: one(reservations, {
+    fields: [reservationItemDetails.reservationId],
+    references: [reservations.id],
+  }),
+  reservationItem: one(reservationItems, {
+    fields: [reservationItemDetails.reservationItemId],
+    references: [reservationItems.id],
+  }),
+}));
+
+// ============================================================================
 // Product Accessories (Upsell/Cross-sell)
 // ============================================================================
 
@@ -2712,6 +3146,37 @@ export const customersRelations = relations(customers, ({ one, many }) => ({
   reservations: many(reservations),
   invoices: many(invoices),
   sessions: many(customerSessions),
+  fieldValues: many(customerFieldValues),
+}));
+
+export const customerFieldDefinitionsRelations = relations(
+  customerFieldDefinitions,
+  ({ one, many }) => ({
+    store: one(stores, {
+      fields: [customerFieldDefinitions.storeId],
+      references: [stores.id],
+    }),
+    values: many(customerFieldValues),
+    targets: many(customerFieldTargets),
+  }),
+);
+
+export const customerFieldTargetsRelations = relations(customerFieldTargets, ({ one }) => ({
+  definition: one(customerFieldDefinitions, {
+    fields: [customerFieldTargets.definitionId],
+    references: [customerFieldDefinitions.id],
+  }),
+}));
+
+export const customerFieldValuesRelations = relations(customerFieldValues, ({ one }) => ({
+  customer: one(customers, {
+    fields: [customerFieldValues.customerId],
+    references: [customers.id],
+  }),
+  definition: one(customerFieldDefinitions, {
+    fields: [customerFieldValues.definitionId],
+    references: [customerFieldDefinitions.id],
+  }),
 }));
 
 export const customerSessionsRelations = relations(customerSessions, ({ one }) => ({
@@ -2744,6 +3209,7 @@ export const reservationsRelations = relations(reservations, ({ one, many }) => 
   activity: many(reservationActivity),
   calendarEvents: many(reservationCalendarEvents),
   invoices: many(invoices),
+  itemDetails: many(reservationItemDetails),
 }));
 
 export const marketplaceBookingAttemptsRelations = relations(
@@ -2784,6 +3250,7 @@ export const reservationItemsRelations = relations(reservationItems, ({ one, man
     references: [products.id],
   }),
   assignedUnits: many(reservationItemUnits),
+  details: many(reservationItemDetails),
 }));
 
 export const paymentsRelations = relations(payments, ({ one, many }) => ({
@@ -3958,3 +4425,5 @@ export const storePhoneNumbersRelations = relations(storePhoneNumbers, ({ one })
     references: [stores.id],
   }),
 }));
+
+export { voiceSessionsTable, voiceToolExecutionsTable } from "./schema.voice";

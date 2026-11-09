@@ -54,8 +54,8 @@ const writeStorage = (storage: Storage, key: string, value: string) => {
  * Asks self-hosters to star the repository, once per session, from the
  * dashboard only.
  *
- * Rendered exclusively in standalone mode (see the dashboard layout): the
- * cloud never ships it. It makes no outbound request — the star count is not
+ * Rendered only on a self-hosted instance, LOUEZ_HOSTED_BY unset (see the
+ * dashboard layout): the cloud never ships it. It makes no outbound request — the star count is not
  * fetched, so a self-hosted instance still talks to nobody until the operator
  * clicks through.
  */
@@ -74,6 +74,8 @@ export function StarPrompt() {
     if (readStorage(sessionStorage, WELCOME_KEY)) return;
 
     const timer = setTimeout(() => {
+      if (document.querySelector('[role="dialog"], [role="alertdialog"], [data-passkey-prompt]'))
+        return;
       writeStorage(sessionStorage, SEEN_KEY, "1");
       setOpen(true);
     }, DELAY_MS);

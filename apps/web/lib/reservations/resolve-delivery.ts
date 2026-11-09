@@ -129,7 +129,8 @@ export const resolveDelivery = async ({
   const pickupLocation = pickupResult.value;
   const returnLocation = returnResult.value;
 
-  if (isDeliveryForced && settings?.enabled && !hasOutboundDelivery) {
+  // A delivery-only store neither hands over nor takes back at a location.
+  if (isDeliveryForced && settings?.enabled && (!hasOutboundDelivery || !hasReturnDelivery)) {
     return failReservation("errors.deliveryRequired");
   }
 

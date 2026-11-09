@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { getLocale } from "next-intl/server";
 
 import { getMarketplaceCohortStatus } from "@louez/api/services";
 import { db, users } from "@louez/db";
@@ -7,9 +8,11 @@ import { type ReeentIntroStatus, profileSchema } from "@louez/validations";
 import { env } from "@/env";
 import { isReeentLoueur } from "@/lib/acquisition/signup-origin";
 import { auth } from "@/lib/auth";
+import { getUncreatedStorePolicy } from "@/lib/billing/policy";
 import { isCurrentUserPlatformAdmin } from "@/lib/platform-admin";
 
 import { OnboardingShell } from "./_components/onboarding-shell";
+import { describeReeentIntroPricing } from "./_lib/reeent-intro-pricing";
 import { getOnboardingSteps } from "./_lib/steps";
 
 /** Explanations the reeent step walks through before it asks its question. */
@@ -53,6 +56,11 @@ export default async function OnboardingLayout({ children }: { children: React.R
   const cohort = fromReeent
     ? await getMarketplaceCohortStatus(env.REEENT_LAUNCH_COHORT_SIZE)
     : null;
+  // The step comes before the store exists: its pricing slide is the one of a store
+  // created now.
+  const reeentPricing = cohort
+    ? describeReeentIntroPricing(await getUncreatedStorePolicy(new Date()), await getLocale())
+    : null;
 
   // User-level steps only show up the first time. The step list is computed
   // once per full page load: completing a step mid-flow does not re-render
@@ -78,9 +86,10 @@ export default async function OnboardingLayout({ children }: { children: React.R
         userSeed: user?.id ?? "louez",
       }}
       reeentIntro={
-        cohort
+        cohort && reeentPricing
           ? {
               cohort,
+              pricing: reeentPricing,
               initialStatus: toReeentIntroStatus(user?.businessType),
               // Coming back to the step after acknowledging it lands on the
               // question: the explanations were already displayed once.

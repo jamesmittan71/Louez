@@ -82,7 +82,9 @@ export const useCheckoutDelivery = ({
    * never briefly out of step.
    */
   const [isReturnSameAsPickup, setIsReturnSameAsPickup] = useState(true);
-  const [returnMethod, setReturnMethod] = useState<LegMethod>("store");
+  const [returnMethod, setReturnMethod] = useState<LegMethod>(
+    isDeliveryForced ? "address" : "store",
+  );
   const [returnLocationId, setReturnLocationId] = useState<string | null>(null);
   const [returnAddress, setReturnAddress] = useState<DeliveryAddress>(DEFAULT_DELIVERY_ADDRESS);
   const [returnDistance, setReturnDistance] = useState<number | null>(null);
@@ -107,17 +109,11 @@ export const useCheckoutDelivery = ({
         )
       : { outboundFee: 0, returnFee: 0, totalFee: 0 };
 
-  // Force outbound to address when delivery mode requires it
+  // A delivery-only store delivers and collects: both legs go to an address.
   useEffect(() => {
     if (isDeliveryForced) {
       setOutboundMethod("address");
-      // The return leg mirrors the pickup by default, so it has to follow the
-      // forced method too — otherwise the step claims "same place" while the
-      // two legs disagree. Choosing "somewhere else" frees it again.
-      setIsReturnSameAsPickup((isSame) => {
-        if (isSame) setReturnMethod("address");
-        return isSame;
-      });
+      setReturnMethod("address");
     }
   }, [isDeliveryForced]);
 

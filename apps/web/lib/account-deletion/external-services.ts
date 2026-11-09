@@ -2,7 +2,10 @@ import "server-only";
 
 import { DeleteObjectsCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 
+import { isBillingSyncEnabled } from "@louez/db/billing-queue";
+
 import { env } from "@/env";
+import { log } from "@/lib/evlog";
 import { releaseNumberBinding } from "@/lib/ai/phone/number-release";
 import { decryptIntegrationSecret } from "@/lib/integrations/credentials";
 import {
@@ -17,7 +20,7 @@ import {
 } from "@/lib/integrations/providers/superpdp/superpdp-client";
 import { tulipDeleteProduct } from "@/lib/integrations/tulip/client";
 import { getStorageClient } from "@/lib/storage/files";
-import { getStripe } from "@/lib/stripe/client";
+import { getStripe, stripeKeyMode } from "@/lib/stripe/client";
 
 import { deleteGleapUser, deleteOpenReplayUser, deletePostHogPerson } from "./analytics-erasure";
 import type {
@@ -99,7 +102,7 @@ const createStripeConnectCleanupAdapter = (stripe = getStripe()): StripeConnectC
   deleteAccount: (accountId) => stripe.accounts.del(accountId),
   // Stripe's Account object does not expose the request mode. Unknown or
   // restricted-key prefixes are treated as live so Standard accounts fail closed.
-  isLiveMode: !/^(?:sk|rk)_test_/.test(env.STRIPE_SECRET_KEY ?? ""),
+  isLiveMode: stripeKeyMode(env.STRIPE_SECRET_KEY ?? "") === "live",
   retrieveAccount: async (accountId) => {
     const account = await stripe.accounts.retrieve(accountId);
     return {
@@ -139,8 +142,34 @@ export const cleanupStripeConnectedAccounts = async (
   }
 };
 
+/**
+ * The Stripe objects Louez removes itself. When Louez reports to the billing service
+ * (LOUEZ_BILLING=cloud with BILLING_SERVICE_URL), the service owns the platform
+ * customers: it bills the final statement from the store's final snapshot, then closes
+ * or anonymises the customer after its retention period (louez-billing design §8.6).
+ * So Louez does not delete them. It still cancels their Pro/Ultra subscription, which
+ * stays Louez's until Q10 (design §1, §8.6) and which nothing else would ever cancel,
+ * and removes the store's Connect accounts. Otherwise Louez removes all three, as before.
+ */
+export const selectStripeObjectsToRemove = (
+  resources: Pick<
+    AccountDeletionExternalResources,
+    "stripeAccountIds" | "stripeCustomerIds" | "stripeSubscriptionIds"
+  >,
+  billingServiceOwnsCustomers: boolean = isBillingSyncEnabled(),
+): {
+  stripeAccountIds: string[];
+  stripeCustomerIds: string[];
+  stripeSubscriptionIds: string[];
+} => ({
+  stripeAccountIds: resources.stripeAccountIds,
+  stripeCustomerIds: billingServiceOwnsCustomers ? [] : resources.stripeCustomerIds,
+  stripeSubscriptionIds: resources.stripeSubscriptionIds,
+});
+
 const cleanupStripeBilling = async (context: AccountDeletionContext): Promise<void> => {
-  const { stripeAccountIds, stripeCustomerIds, stripeSubscriptionIds } = context.externalResources;
+  const { stripeAccountIds, stripeCustomerIds, stripeSubscriptionIds } =
+    selectStripeObjectsToRemove(context.externalResources);
   if (
     stripeAccountIds.length === 0 &&
     stripeCustomerIds.length === 0 &&
@@ -179,6 +208,7 @@ interface GoogleCleanupDependencies {
   isCredentialUnavailableError: (error: unknown) => boolean;
   now: () => number;
   refreshAccessToken: typeof refreshGoogleCalendarAccessToken;
+  reportCalendarLeftBehind: (calendarId: string) => void;
   revokeToken: typeof revokeGoogleToken;
 }
 
@@ -189,6 +219,11 @@ const googleCleanupDependencies = {
     error instanceof GoogleCalendarApiError && (error.status === 400 || error.status === 401),
   now: Date.now,
   refreshAccessToken: refreshGoogleCalendarAccessToken,
+  reportCalendarLeftBehind: (calendarId: string) =>
+    log.warn(
+      "account-deletion",
+      `Google calendar ${calendarId} left in the owner's Google account: Google no longer grants Louez access`,
+    ),
   revokeToken: revokeGoogleToken,
 } satisfies GoogleCleanupDependencies;
 
@@ -229,9 +264,10 @@ export const cleanupGoogleConnections = async (
         calendarId: connection.calendarId,
       });
     } else if (connection.calendarId) {
-      throw new Error(
-        "Known Google Calendar could not be deleted because no usable credential remains",
-      );
+      // Google no longer lets Louez in, so the calendar can only be removed by
+      // its owner, in their own Google account. Blocking here would make the
+      // account impossible to delete; the deletion dialog warns them instead.
+      dependencies.reportCalendarLeftBehind(connection.calendarId);
     }
 
     for (const token of [refreshToken, accessToken].filter((value): value is string =>
@@ -330,10 +366,11 @@ export const assertAccountDeletionExternalConfiguration = (
   if (!context) return;
 
   const resources = context.externalResources;
+  const stripeObjects = selectStripeObjectsToRemove(resources);
   if (
-    (resources.stripeAccountIds.length > 0 ||
-      resources.stripeCustomerIds.length > 0 ||
-      resources.stripeSubscriptionIds.length > 0) &&
+    (stripeObjects.stripeAccountIds.length > 0 ||
+      stripeObjects.stripeCustomerIds.length > 0 ||
+      stripeObjects.stripeSubscriptionIds.length > 0) &&
     !env.STRIPE_SECRET_KEY
   ) {
     throw new Error("Stripe erasure credentials are not configured");

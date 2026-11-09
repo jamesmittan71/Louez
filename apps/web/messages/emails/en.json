@@ -40,7 +40,7 @@
     "title": "Reservation confirmed!",
     "body": "Your reservation #{number} is confirmed. Here is the summary:",
     "summary": "Summary",
-    "contractSignature": "Your contract is attached and ready to sign online.",
+    "contractSignature": "Your rental contract is ready. Sign it online before you pick up the equipment.",
     "signContract": "Sign the contract"
   },
   "requestReceived": {
@@ -86,7 +86,9 @@
     "dontForget": "Don't forget:",
     "bringId": "A valid ID",
     "bringConfirmation": "Your reservation confirmation",
-    "seeTomorrow": "See you tomorrow!"
+    "seeTomorrow": "See you tomorrow!",
+    "contractSignature": "Your rental contract is not signed yet. Please sign it online before you pick up the equipment.",
+    "signContract": "Sign the contract"
   },
   "reminderReturn": {
     "subject": "Reminder: equipment return on {date}",
@@ -204,6 +206,22 @@
       "body": "The number {number} for {storeName} has been detached and is no longer active. You can pick a new number anytime from your AI Assistant."
     }
   },
+  "balanceLimit": {
+    "balanceLabel": "Unpaid balance:",
+    "limitLabel": "Limit:",
+    "cta": "Add a card",
+    "footer": "Once a card is on file, Louez charges your statements to it, with nothing for you to do.",
+    "near": {
+      "subject": "{storeName}: your unpaid balance is nearing its limit",
+      "title": "Your unpaid balance is nearing its limit",
+      "body": "The amount {storeName} owes Louez and hasn't paid yet is close to its limit. Once it reaches it, your store will stop taking new reservations. Add a billing card so your statements are paid on their own."
+    },
+    "reached": {
+      "subject": "{storeName}: new reservations are paused",
+      "title": "Your unpaid balance has reached its limit",
+      "body": "The amount {storeName} owes Louez and hasn't paid yet has reached its limit, so your store isn't taking new reservations for now. Add a billing card to take reservations again."
+    }
+  },
   "teamInvitation": {
     "subject": "{inviterName} invites you to join {storeName}",
     "title": "Team invitation",
@@ -313,7 +331,9 @@
     "subject": "Your rental contract #{number}",
     "title": "Your rental contract",
     "body": "Here is the rental contract for your reservation #{number}.",
-    "downloadContract": "Download the contract"
+    "downloadContract": "Download the contract",
+    "signBody": "Here is the rental contract for your reservation #{number}. Please read and sign it online before you pick up the equipment.",
+    "signContract": "Sign the contract"
   },
   "customMessage": {
     "subject": "About your reservation #{number}"

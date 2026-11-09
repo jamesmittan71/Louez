@@ -2,19 +2,17 @@ import { and, eq, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import type Stripe from 'stripe';
 
-import { db } from '@louez/db';
+import { db, isDuplicateKeyError, legacyBillingAppliesAt, markLegacyStore } from '@louez/db';
 import { referralRewards, subscriptions } from '@louez/db';
 
+import { isBillingEnabled } from '@/lib/billing/mode';
 import { priceForLocationIndex } from '@/lib/pay-as-you-go/config';
-import {
-  getDefaultFreeReservations,
-  getDefaultPayAsYouGoConfigSnapshot,
-} from '@/lib/pay-as-you-go/defaults';
 import { billingMonthOf, getStoreBilling } from '@/lib/pay-as-you-go/metering';
+import { addFreeReservations, ensureSubscriptionRow } from '@/lib/pay-as-you-go/pricing-lock';
 import { captureReferralServerEvent } from '@/lib/referral/analytics';
 import { referralAnalyticsEvents } from '@/lib/referral/analytics-events';
 import { stripe } from '@/lib/stripe/client';
-import { getOrCreateStripeCustomer } from '@/lib/stripe/subscriptions';
+import { getLegacyPlatformCustomerId } from '@/lib/stripe/subscriptions';
 
 import { isWithinMonthlyCap } from './cap';
 import {
@@ -25,12 +23,6 @@ import { getReferralProgramConfig } from './defaults';
 import { notifyReferrerRewardGranted } from './notify';
 import { qualifiesForReferralReward } from './qualification';
 import { computeReferrerReward } from './reward';
-
-/** mysql2 surfaces a unique-violation as a "Duplicate entry" error — swallowed for idempotency. */
-function isDuplicateError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes('Duplicate') || message.includes('unique');
-}
 
 function stripeResourceId(
   resource: string | { id?: string } | null | undefined,
@@ -269,11 +261,13 @@ async function trackReferrerRewardClawedBack({
  * payment at/above the minimum, grant its Referrer the plan-aware Referrer Reward (free
  * reservations for a pay-as-you-go referrer; an equivalent euro invoice credit for a
  * subscribed one). Idempotent — a referral pays out at most once (unique referred store).
- * Safe to call on every completed online payment; it no-ops when not applicable.
+ * Safe to call on every completed online payment; it no-ops when not applicable, and
+ * when platform billing is off (rewards are billing credits).
  */
 export async function maybeGrantReferrerReward(
   input: MaybeGrantReferrerRewardInput,
 ): Promise<{ granted: boolean; reason?: string }> {
+  if (!isBillingEnabled()) return { granted: false, reason: 'billing_off' };
   const referrerStoreId = input.referredStore.referredByStoreId;
   if (!referrerStoreId) {
     await trackQualifyingPaymentEvaluated({
@@ -315,6 +309,18 @@ export async function maybeGrantReferrerReward(
     return { granted: false, reason: 'already_rewarded' };
   }
 
+  // The reward is a credit on Louez's own billing: none for a Referrer the billing
+  // service bills (louez-billing docs/api, README §8.3).
+  const at = input.at ?? new Date();
+  if (!(await legacyBillingAppliesAt(db, referrerStoreId, at))) {
+    await trackQualifyingPaymentEvaluated({
+      input,
+      granted: false,
+      reason: 'referrer_not_legacy_billed',
+    });
+    return { granted: false, reason: 'referrer_not_legacy_billed' };
+  }
+
   // Size the reward from the Referrer's own billing: free reservations valued at their
   // entry-tier pay-as-you-go price, or the equivalent euro credit if they are subscribed.
   const referrerBilling = await getStoreBilling(referrerStoreId);
@@ -328,7 +334,6 @@ export async function maybeGrantReferrerReward(
     unitValueCents,
   });
 
-  const at = input.at ?? new Date();
   const grantedMonth = billingMonthOf(at);
   const currency = (referrerBilling.config.currency || input.currency || 'eur')
     .toLowerCase()
@@ -383,7 +388,7 @@ export async function maybeGrantReferrerReward(
       let invoiceItemId: string | null = null;
       const customerId =
         reward.creditCents > 0
-          ? await getOrCreateStripeCustomer(referrerStoreId)
+          ? await getLegacyPlatformCustomerId(referrerStoreId)
           : null;
       try {
         await db.transaction(async (tx) => {
@@ -441,13 +446,15 @@ export async function maybeGrantReferrerReward(
             creditCents: reward.creditCents,
             status: 'granted',
           });
+          // The referrer's rewards are in its legacy_store snapshot.
+          await markLegacyStore(tx, referrerStoreId);
         });
       } catch (error) {
         // The credit was already created; if the ledger row cannot be written for a
         // non-duplicate reason, delete the credit so it never applies with no ledger basis
         // (an orphaned credit could not be clawed back). Duplicates fall through to the
         // outer catch and report already_rewarded.
-        if (!isDuplicateError(error) && invoiceItemId) {
+        if (!isDuplicateKeyError(error) && invoiceItemId) {
           await stripe.invoiceItems.del(invoiceItemId).catch(() => {});
         }
         throw error;
@@ -457,16 +464,13 @@ export async function maybeGrantReferrerReward(
       // (closing the read-then-insert race), then increment the Referrer's granted counter and
       // write the ledger atomically. The ledger insert is last so the whole grant rolls back
       // together on a duplicate race.
-      const sub = await db.query.subscriptions.findFirst({
-        where: eq(subscriptions.storeId, referrerStoreId),
-        columns: { id: true },
-      });
       await db.transaction(async (tx) => {
-        if (sub) {
-          await tx.execute(
-            sql`SELECT id FROM subscriptions WHERE store_id = ${referrerStoreId} FOR UPDATE`,
-          );
-        }
+        // A legacy Referrer without a row gets one with the pricing it already pays (so the
+        // lock below holds); the reward then only adds free reservations.
+        await ensureSubscriptionRow(tx, referrerStoreId);
+        await tx.execute(
+          sql`SELECT id FROM subscriptions WHERE store_id = ${referrerStoreId} FOR UPDATE`,
+        );
         if (config.monthlyCapPerReferrer > 0) {
           const [{ value }] = await tx
             .select({ value: sql<number>`count(*)` })
@@ -488,26 +492,8 @@ export async function maybeGrantReferrerReward(
             return;
           }
         }
-        if (sub) {
-          await tx
-            .update(subscriptions)
-            .set({
-              freeReservationsGranted: sql`${subscriptions.freeReservationsGranted} + ${reward.freeReservations}`,
-              updatedAt: new Date(),
-            })
-            .where(eq(subscriptions.storeId, referrerStoreId));
-        } else {
-          // Legacy store with no subscription row: persist the welcome allowance + reward.
-          await tx.insert(subscriptions).values({
-            id: nanoid(),
-            storeId: referrerStoreId,
-            planSlug: 'pay_as_you_go',
-            billingMode: 'pay_as_you_go',
-            payAsYouGoConfig: getDefaultPayAsYouGoConfigSnapshot(currency),
-            freeReservationsGranted:
-              getDefaultFreeReservations() + reward.freeReservations,
-          });
-        }
+        // Also marks the referrer's legacy_store, which holds this ledger row too.
+        await addFreeReservations(tx, referrerStoreId, reward.freeReservations);
         await tx.insert(referralRewards).values({
           id: nanoid(),
           ...ledgerBase,
@@ -536,7 +522,7 @@ export async function maybeGrantReferrerReward(
       return { granted: false, reason: 'monthly_cap' };
     }
   } catch (error) {
-    if (isDuplicateError(error)) {
+    if (isDuplicateKeyError(error)) {
       await trackQualifyingPaymentEvaluated({
         input,
         granted: false,
@@ -581,13 +567,15 @@ export async function maybeGrantReferrerReward(
  * Clawback handler: when the qualifying payment behind a granted Referrer Reward is
  * refunded or disputed within the clawback window, reverse the reward. Free-reservation
  * rewards lose only their not-yet-consumed credits; invoice-credit rewards have their
- * pending Stripe credit removed. Idempotent and a no-op outside the window.
+ * pending Stripe credit removed. Idempotent, and a no-op outside the window or when
+ * platform billing is off (no reward is granted then).
  */
 export async function clawbackReferrerRewardForQualifyingPayment(input: {
   stripeChargeId?: string | null;
   stripePaymentIntentId?: string | null;
   at?: Date;
 }): Promise<{ clawedBack: boolean; reason?: string }> {
+  if (!isBillingEnabled()) return { clawedBack: false, reason: 'billing_off' };
   const where = input.stripeChargeId
     ? eq(referralRewards.stripeChargeId, input.stripeChargeId)
     : input.stripePaymentIntentId
@@ -648,6 +636,7 @@ export async function clawbackReferrerRewardForQualifyingPayment(input: {
         clawbackClaimed = false;
         return;
       }
+      await markLegacyStore(tx, reward.referrerStoreId);
 
       const billing = await getStoreBilling(reward.referrerStoreId);
       const used = Math.max(
@@ -687,7 +676,7 @@ export async function clawbackReferrerRewardForQualifyingPayment(input: {
       ) {
         const customerId =
           target.customerId ??
-          (await getOrCreateStripeCustomer(reward.referrerStoreId));
+          (await getLegacyPlatformCustomerId(reward.referrerStoreId));
         await stripe.invoiceItems.create(
           {
             customer: customerId,
@@ -711,16 +700,21 @@ export async function clawbackReferrerRewardForQualifyingPayment(input: {
       }
     }
 
-    const claim = await db
-      .update(referralRewards)
-      .set({ status: 'clawed_back', clawedBackAt: at, updatedAt: new Date() })
-      .where(
-        and(
-          eq(referralRewards.id, reward.id),
-          eq(referralRewards.status, 'granted'),
-        ),
-      );
-    if ((claim[0]?.affectedRows ?? 0) === 0) {
+    const claimed = await db.transaction(async (tx) => {
+      const claim = await tx
+        .update(referralRewards)
+        .set({ status: 'clawed_back', clawedBackAt: at, updatedAt: new Date() })
+        .where(
+          and(
+            eq(referralRewards.id, reward.id),
+            eq(referralRewards.status, 'granted'),
+          ),
+        );
+      if ((claim[0]?.affectedRows ?? 0) === 0) return false;
+      await markLegacyStore(tx, reward.referrerStoreId);
+      return true;
+    });
+    if (!claimed) {
       await trackClawbackEvaluated({
         reward,
         clawedBack: false,

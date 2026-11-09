@@ -1,14 +1,20 @@
 import type { MissingRequiredAccessory } from "@louez/api/services";
-import type { CreateReservationInput } from "@louez/validations";
+import type { CheckoutFieldIssue, CreateReservationInput } from "@louez/validations";
 
 export type ReservationSource = "online" | "phone" | "marketplace";
 
 export type ReservationErrorParams = Record<string, string | number>;
 
-export type ReservationFailureDetails = {
-  code: "required_accessories_missing";
-  missingAccessories: MissingRequiredAccessory[];
-};
+export type ReservationFailureDetails =
+  | {
+      code: "required_accessories_missing";
+      missingAccessories: MissingRequiredAccessory[];
+    }
+  | {
+      /** Custom fields the checkout asked: every issue, the error names the first. */
+      code: "checkout_fields_invalid";
+      issues: CheckoutFieldIssue[];
+    };
 
 /** Every non-success outcome of the reservation pipeline (translation key + params). */
 export type ReservationFailure = {
@@ -61,6 +67,17 @@ export type CreateReservationRequest = CreateReservationInput & {
   reservationId?: string;
   /** Server-only capability required for marketplace reservations. */
   marketplaceSecret?: string;
+  /**
+   * Server-only: the buyer holds a storefront session for the checkout's
+   * e-mail. Their custom field and native profile values then overwrite what
+   * is on file; otherwise they only fill what is missing.
+   */
+  customerSignedIn?: boolean;
+  /**
+   * Server-only: the web checkout's IP address. Its checkout requires accepting the
+   * rental terms, which signs the contract; the IP is recorded with it.
+   */
+  termsAcceptedFromIp?: string;
 };
 
 /** A quote prices the same cart without a customer, amounts or notes. */
@@ -74,6 +91,11 @@ export type QuoteReservationRequest = Omit<
   | "advisorConversationId"
   | "reservationId"
   | "marketplaceSecret"
+  | "customerSignedIn"
+  | "termsAcceptedFromIp"
+  | "customerFields"
+  | "itemDetails"
+  | "profileFields"
 > & {
   customer?: CreateReservationInput["customer"];
 };

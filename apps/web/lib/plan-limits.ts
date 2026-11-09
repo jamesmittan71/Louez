@@ -1,4 +1,4 @@
-import { db } from '@louez/db'
+import { type Transaction, db } from '@louez/db'
 import {
   products,
   reservations,
@@ -9,6 +9,7 @@ import {
   smsCredits,
 } from '@louez/db'
 import { eq, count, and, gte, sql } from 'drizzle-orm'
+import { isBillingEnabled } from '@/lib/billing/mode'
 import { getPlan, getDefaultPlan, getPayAsYouGoPlan, SMS_TOPUP_PRICING, type Plan } from '@/lib/plans'
 
 // ============================================================================
@@ -40,28 +41,102 @@ export interface StoreLimits {
 // Usage Queries
 // ============================================================================
 
-/**
- * Get the current plan for a store
- */
-export async function getStorePlan(storeId: string): Promise<Plan> {
-  const subscription = await db.query.subscriptions.findFirst({
-    where: eq(subscriptions.storeId, storeId),
-    columns: { planSlug: true, status: true, billingMode: true },
-  })
+/** The columns of a store's `subscriptions` row that say which plan it is on. */
+export type PlanRow = Pick<
+  typeof subscriptions.$inferSelect,
+  'billingMode' | 'planSlug' | 'status' | 'stripeSubscriptionId'
+>
 
+/** A row whose plan is in force (planInForce). */
+export type PlanInForceRow<Row extends PlanRow> = Row & {
+  readonly billingMode: 'subscription'
+  readonly status: 'active' | 'trialing' | 'past_due'
+  readonly stripeSubscriptionId: string
+}
+
+/**
+ * Whether a Louez plan is in force on the row (louez-billing docs/api, README §8.7):
+ * subscription billing, a status other than `cancelled`, a plan Louez knows, and a
+ * Stripe subscription that bills it. The `store` snapshot sends the plan only then.
+ * On every row with a Stripe subscription id it agrees with getStorePlan, which also
+ * gives a plan's limits to a row the platform admin set to subscription billing.
+ */
+export function planInForce<Row extends PlanRow>(
+  row: Row | null | undefined,
+): row is PlanInForceRow<Row> {
+  return (
+    row !== null &&
+    row !== undefined &&
+    row.billingMode === 'subscription' &&
+    row.status !== 'cancelled' &&
+    Boolean(row.stripeSubscriptionId) &&
+    getPlan(row.planSlug) !== undefined
+  )
+}
+
+/**
+ * The slug of the plan in force on the row (planInForce), or null. It is all the billing
+ * service reads of the store snapshot's plan to issue a version of the store's policy
+ * (louez-billing docs/api, README §8.7): a status, period or cancellation change that
+ * keeps the plan in force issues none.
+ */
+export function planInForceSlug(row: PlanRow | null | undefined): string | null {
+  return planInForce(row) ? row.planSlug : null
+}
+
+/**
+ * The plan in force on the store's row (planInForceSlug), read in `tx` with the row
+ * locked, so a concurrent write waits. Read before and after a write in the same
+ * transaction, it tells whether the write started, changed or ended the plan, the one
+ * kind of write that calls syncPlanSoon (lib/billing-sync/plan-sync-soon.ts). Call it
+ * once the row exists: a locking read of a missing row takes a gap lock, and two
+ * transactions that then insert it deadlock.
+ */
+export async function lockPlanInForce(tx: Transaction, storeId: string): Promise<string | null> {
+  const [row] = await tx
+    .select({
+      billingMode: subscriptions.billingMode,
+      planSlug: subscriptions.planSlug,
+      status: subscriptions.status,
+      stripeSubscriptionId: subscriptions.stripeSubscriptionId,
+    })
+    .from(subscriptions)
+    .where(eq(subscriptions.storeId, storeId))
+    .for('update')
+  return planInForceSlug(row)
+}
+
+/** The plan a store's row gives, with platform billing on (getStorePlan). */
+export function storePlanOfRow(
+  row: Pick<PlanRow, 'billingMode' | 'planSlug' | 'status'> | null | undefined,
+): Plan {
   // Pay-as-you-go stores get the unlimited PAYG plan regardless of plan slug.
-  if (subscription?.billingMode === 'pay_as_you_go') {
+  if (row?.billingMode === 'pay_as_you_go') {
     return getPayAsYouGoPlan()
   }
 
   // No subscription or a cancelled one → no paid tier active, fall back to the
   // default plan (pay-as-you-go: unlimited, billed per rental, no monthly fee).
-  if (!subscription || subscription.status === 'cancelled') {
+  if (!row || row.status === 'cancelled') {
     return getDefaultPlan()
   }
 
-  const plan = getPlan(subscription.planSlug)
-  return plan || getDefaultPlan()
+  return getPlan(row.planSlug) || getDefaultPlan()
+}
+
+/**
+ * Get the current plan for a store. Without platform billing (LOUEZ_BILLING off) a store
+ * has no plan to buy, so every store gets the unlimited pay-as-you-go plan, whatever row
+ * an earlier version left: no limit, no blur and no upgrade prompt.
+ */
+export async function getStorePlan(storeId: string): Promise<Plan> {
+  if (!isBillingEnabled()) return getPayAsYouGoPlan()
+
+  const subscription = await db.query.subscriptions.findFirst({
+    where: eq(subscriptions.storeId, storeId),
+    columns: { planSlug: true, status: true, billingMode: true },
+  })
+  return storePlanOfRow(subscription)
 }
 
 /**
@@ -345,6 +420,21 @@ export async function getSmsQuotaStatus(storeId: string): Promise<SmsQuotaStatus
     getSmsPrepaidBalance(storeId),
   ])
 
+  // Without platform billing the operator pays its own SMS provider: Louez sets no quota
+  // and sells no top-up.
+  if (!isBillingEnabled()) {
+    return {
+      allowed: true,
+      current: smsCount,
+      planLimit: null,
+      prepaidBalance,
+      totalAvailable: Infinity,
+      planSlug: plan.slug,
+      canTopup: false,
+      topupPriceCents: null,
+    }
+  }
+
   const planLimit = plan.features.maxSmsPerMonth
   const topupPriceCents = SMS_TOPUP_PRICING[plan.slug] ?? null
   const canTopup = topupPriceCents !== null
@@ -385,6 +475,9 @@ export async function getSmsQuotaStatus(storeId: string): Promise<SmsQuotaStatus
  * Returns 'plan' if within monthly limit, 'topup' if using prepaid
  */
 export async function determineSmsSource(storeId: string): Promise<'plan' | 'topup'> {
+  // No quota without platform billing, so prepaid credits are never drawn.
+  if (!isBillingEnabled()) return 'plan'
+
   const [plan, smsCount] = await Promise.all([
     getStorePlan(storeId),
     getSmsUsageThisMonth(storeId),

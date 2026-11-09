@@ -20,6 +20,14 @@ _Avoid_: client, buyer
 The individual-or-business identity a Reservation is invoiced under, with the company name and identifiers when it is a business. Captured on the reservation at booking (`billingSnapshot`) and edited only on that reservation, so a later checkout or profile change never rewrites who an existing reservation, its contract, or its invoice is billed to.
 _Avoid_: customer type (when talking about a reservation)
 
+**Custom field**:
+A piece of information a Store chooses to keep on its Customers beyond what Louez models natively: an identity or tax number, a driving licence, an emergency contact, a shoe size. Each Store defines its own (type, section, whether it is required, sensitive, searchable, shown in the list or printed on the contract); values are stored per Customer, never in Store settings. Anything Louez itself acts on (birth date, origin, creation channel, social links) stays a native column instead. French UI: "Champ personnalisé".
+_Avoid_: custom attribute, extra field, metadata, booking attribute (that one belongs to a Product)
+
+**Field template**:
+A ready-made set of Custom fields shipped in code, by country (Brazil: CPF/CNPJ, RG) or by activity (ski: height, weight, shoe size), that a Store adopts in one click. Adoption copies the fields into the Store, keyed so that adopting twice adds nothing; from then on they are ordinary Custom fields the Store can rename, reorder or archive. French UI: "Modèle de champs".
+_Avoid_: preset, form template, inspection template
+
 **Reservation payment**:
 A payment made by a Customer for a Store reservation.
 _Avoid_: Louez sale, platform payment
@@ -31,6 +39,30 @@ _Avoid_: Louez commission, platform commission
 **Louez commission**:
 A per-reservation fee charged by Louez to a Store, metered through the pay-as-you-go ledger (`platform_fee`) and billed monthly. It is charged on reservations, never itemized on a Store's Invoices to its Customers.
 _Avoid_: Stripe commission
+
+**Billable reservation**:
+A Reservation in status `confirmed`, `ongoing` or `completed`, the statuses the Louez commission is charged on. `billable_at` records the first time it entered them; `withdrawn_at` records when a cancellation took it out. A rejected or declined reservation was never billable.
+_Avoid_: paid reservation (a billable reservation may be unpaid), confirmed (alone)
+
+**Platform billing**:
+Louez billing its Stores: the Louez commission, plans, top-ups, referral rewards and month-end invoices. On only when `LOUEZ_BILLING=cloud` (Louez Cloud); a self-hosted instance, single-store or multi-store, bills no Store, writes no billing rows, gives every Store every feature without a plan limit, and has no plan, billing, referral or platform-admin page.
+_Avoid_: payments (a Customer paying a Store), Stripe Connect
+
+**Card gate**:
+The refusal of a step that would make a new Reservation billable while the Store's billing policy says it is not taking reservations: an unpaid balance at its limit, an overdue payment, or a suspension. A missing card alone never closes it. Only with Platform billing through the billing service; a completed payment, drafts, quotes, pick-ups, returns and cancellations always go through. Customers see only that the Store is not taking reservations online, and how to contact it.
+_Avoid_: block, paywall
+
+**Hosting identity**:
+Who hosts an instance (`LOUEZ_HOSTED_BY`): unset when the operator hosts it, `lumycloud` for Louez Cloud. It decides the storefront legal notice's hosting line and whether the dashboard asks for a GitHub star. Neither Platform billing nor the deployment mode (`LOUEZ_MODE`) decides it.
+_Avoid_: cloud mode, platform mode
+
+**Offer for new Stores**:
+The built-in pay-as-you-go ladder and free-reservation allowance (`PAYG_FREE_RESERVATIONS`) written onto a Store's subscription when Louez's own billing creates the Store, with Platform billing on. A Store then pays what its own subscription says, so changing the offer never reprices it.
+_Avoid_: default pricing, platform default
+
+**Pricing version**:
+The pricing model a Store's Louez commission follows (`subscriptions.pricing_version`); the Store's own numbers are stored next to it. The values are defined on the `PricingVersion` type in `packages/types`.
+_Avoid_: plan, tier, price list
 
 **Accounting export**:
 A file exported from Louez that summarizes operational or payment data for a Store.
@@ -203,6 +235,9 @@ _Avoid_: infinite stock, unlimited capacity, service product type
 ## Relationships
 
 - A **Store** receives **Reservation payments** from **Customers**.
+- A **Store** defines its own **Custom fields**; a **Customer** holds at most one value per Custom field.
+- A **Field template** is only a starting point: once adopted, its **Custom fields** belong to the Store and no longer follow the template.
+- A sensitive **Custom field** is masked on the record, left out of exports unless the owner opts in, and never read back to the AI assistant or MCP; it is still printed on the contract when the Store flags it for that.
 - A **Store** has exactly one **Online Store**; the dashboard edits it in one place, and only the Store settings keep what is not shown to customers (booking rules, company, hours, payments).
 - A **Reservation payment** can produce **Stripe fees**.
 - A **Stripe fee** is charged by Stripe, not by Louez.

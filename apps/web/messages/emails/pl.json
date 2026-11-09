@@ -39,7 +39,9 @@
     "subject": "Twoja rezerwacja #{number} jest potwierdzona",
     "title": "Rezerwacja potwierdzona!",
     "body": "Twoja rezerwacja #{number} jest potwierdzona. Oto podsumowanie:",
-    "summary": "Podsumowanie"
+    "summary": "Podsumowanie",
+    "contractSignature": "Twoja umowa najmu jest gotowa. Podpisz ją online przed odbiorem sprzętu.",
+    "signContract": "Podpisz umowę"
   },
   "requestReceived": {
     "subject": "Żądanie rezerwacji #{number} otrzymane",
@@ -75,7 +77,9 @@
     "dontForget": "Nie zapomnij:",
     "bringId": "Ważny dokument tożsamości",
     "bringConfirmation": "Potwierdzenie rezerwacji",
-    "seeTomorrow": "Do zobaczenia jutro!"
+    "seeTomorrow": "Do zobaczenia jutro!",
+    "contractSignature": "Twoja umowa najmu nie została jeszcze podpisana. Podpisz ją online przed odbiorem sprzętu.",
+    "signContract": "Podpisz umowę"
   },
   "reminderReturn": {
     "subject": "Przypomnienie: zwrot sprzętu — {date}",
@@ -124,8 +128,8 @@
     "body": "Mamy nadzieję, że wynajem przebiegł pomyślnie. Twoja opinia pomaga nam się rozwijać i pomaga innym klientom w wyborze.",
     "cta": "Zostaw opinię",
     "disclaimer": "Zajmie to tylko minutę i będzie dla nas wielką pomocą!",
-    "smsThankYou": "Dziekujemy za wynajem!",
-    "smsReview": "Twoja opinia sie liczy:"
+    "smsThankYou": "Dziękujemy za wynajem!",
+    "smsReview": "Twoja opinia się liczy:"
   },
   "newRequestLandlord": {
     "subject": "Nowe żądanie rezerwacji #{number}",
@@ -183,6 +187,22 @@
       "body": "Numer {number} sklepu {storeName} został odłączony i nie jest już aktywny. W każdej chwili możesz wybrać nowy numer w swoim Asystencie AI."
     }
   },
+  "balanceLimit": {
+    "balanceLabel": "Nieopłacone saldo:",
+    "limitLabel": "Limit:",
+    "cta": "Dodaj kartę",
+    "footer": "Gdy karta zostanie zapisana, Louez będzie nią opłacać Twoje zestawienia bez Twojego udziału.",
+    "near": {
+      "subject": "{storeName}: Twoje nieopłacone saldo zbliża się do limitu",
+      "title": "Twoje nieopłacone saldo zbliża się do limitu",
+      "body": "Kwota, którą {storeName} jest winien Louez i jeszcze jej nie zapłacił, zbliża się do limitu. Po jego osiągnięciu Twój sklep przestanie przyjmować nowe rezerwacje. Dodaj kartę do rozliczeń, aby Twoje zestawienia były opłacane automatycznie."
+    },
+    "reached": {
+      "subject": "{storeName}: nowe rezerwacje są wstrzymane",
+      "title": "Twoje nieopłacone saldo osiągnęło limit",
+      "body": "Kwota, którą {storeName} jest winien Louez i jeszcze jej nie zapłacił, osiągnęła limit, więc Twój sklep na razie nie przyjmuje nowych rezerwacji. Dodaj kartę do rozliczeń, aby znów przyjmować rezerwacje."
+    }
+  },
   "teamInvitation": {
     "subject": "{inviterName} zaprasza Cię do {storeName}",
     "title": "Zaproszenie do zespołu",
@@ -236,7 +256,9 @@
     "method": "Metoda",
     "reservation": "Rezerwacja",
     "confirmation": "Twoja płatność została pomyślnie przetworzona.",
-    "keepEmail": "Zachowaj ten e-mail jako potwierdzenie płatności."
+    "keepEmail": "Zachowaj ten e-mail jako potwierdzenie płatności.",
+    "contractSignature": "Twoja umowa jest w załączniku i gotowa do podpisania online.",
+    "signContract": "Podpisz umowę"
   },
   "paymentFailed": {
     "subject": "Płatność nieudana - Rezerwacja #{number}",
@@ -299,7 +321,9 @@
     "subject": "Twoja umowa najmu #{number}",
     "title": "Twoja umowa najmu",
     "body": "Oto umowa najmu dla Twojej rezerwacji #{number}.",
-    "downloadContract": "Pobierz umowę"
+    "downloadContract": "Pobierz umowę",
+    "signBody": "Oto umowa najmu dla Twojej rezerwacji #{number}. Przeczytaj ją i podpisz online przed odbiorem sprzętu.",
+    "signContract": "Podpisz umowę"
   },
   "customMessage": {
     "subject": "W sprawie Twojej rezerwacji #{number}"

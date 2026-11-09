@@ -1,5 +1,7 @@
 "use server";
 
+import { headers } from "next/headers";
+
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -11,7 +13,9 @@ import {
   createReservationInputSchema,
 } from "@louez/validations";
 
+import { getCustomerSession } from "@/lib/customer-auth/session";
 import { log } from "@/lib/evlog";
+import { getClientIp } from "@/lib/request";
 import { getTulipCoverageSummary } from "@/lib/integrations/tulip/contracts";
 import { searchFrenchCompanies, type CompanySearchResult } from "@/lib/recherche-entreprises";
 import { createReservation as createReservationInternal } from "@/lib/reservations/create-reservation";
@@ -213,6 +217,16 @@ export type CreateReservationActionResult =
     };
 
 /**
+ * True when the buyer is signed in to this store's customer account under
+ * the checkout's e-mail. Read from the session cookie only: a client flag
+ * could let anyone overwrite another customer's custom field values.
+ */
+const isSignedInAs = async (storeId: string, email: string): Promise<boolean> => {
+  const session = await getCustomerSession(storeId);
+  return session?.customer.email.trim().toLowerCase() === email.trim().toLowerCase();
+};
+
+/**
  * Public checkout submission. The payload is validated with Zod, the source
  * is always "online" (trusted callers use the internal function), and the
  * result keeps the shape the current client reads: `error`/`errorParams`/
@@ -224,7 +238,12 @@ export async function createReservation(input: unknown): Promise<CreateReservati
     return { error: "errors.invalidData" };
   }
 
-  const result = await createReservationInternal({ ...parsed.data, source: "online" });
+  const result = await createReservationInternal({
+    ...parsed.data,
+    source: "online",
+    customerSignedIn: await isSignedInAs(parsed.data.storeId, parsed.data.customer.email),
+    termsAcceptedFromIp: getClientIp(await headers()),
+  });
 
   if (!result.ok) {
     return {

@@ -39,7 +39,9 @@
     "subject": "Ihre Reservierung #{number} ist bestätigt",
     "title": "Reservierung bestätigt!",
     "body": "Ihre Reservierung #{number} ist bestätigt. Hier ist die Zusammenfassung:",
-    "summary": "Zusammenfassung"
+    "summary": "Zusammenfassung",
+    "contractSignature": "Ihr Mietvertrag ist bereit. Unterschreiben Sie ihn online, bevor Sie die Ausrüstung abholen.",
+    "signContract": "Vertrag unterschreiben"
   },
   "requestReceived": {
     "subject": "Reservierungsanfrage #{number} erhalten",
@@ -75,7 +77,9 @@
     "dontForget": "Vergessen Sie nicht:",
     "bringId": "Einen gültigen Ausweis",
     "bringConfirmation": "Ihre Reservierungsbestätigung",
-    "seeTomorrow": "Bis morgen!"
+    "seeTomorrow": "Bis morgen!",
+    "contractSignature": "Ihr Mietvertrag ist noch nicht unterschrieben. Bitte unterschreiben Sie ihn online, bevor Sie die Ausrüstung abholen.",
+    "signContract": "Vertrag unterschreiben"
   },
   "reminderReturn": {
     "subject": "Erinnerung: Ausrüstungsrückgabe am {date}",
@@ -124,7 +128,7 @@
     "body": "Wir hoffen, dass Ihre Miete gut verlaufen ist. Ihre Bewertung hilft uns, uns zu verbessern und anderen Kunden bei ihrer Entscheidung.",
     "cta": "Bewertung abgeben",
     "disclaimer": "Es dauert nur eine Minute und wäre uns eine große Hilfe!",
-    "smsThankYou": "Danke fur Ihre Miete!",
+    "smsThankYou": "Danke für Ihre Miete!",
     "smsReview": "Ihre Bewertung zahlt:"
   },
   "newRequestLandlord": {
@@ -183,6 +187,22 @@
       "body": "Die Nummer {number} von {storeName} wurde getrennt und ist nicht mehr aktiv. Sie können jederzeit über Ihren KI-Assistenten eine neue Nummer wählen."
     }
   },
+  "balanceLimit": {
+    "balanceLabel": "Offener Saldo:",
+    "limitLabel": "Limit:",
+    "cta": "Karte hinzufügen",
+    "footer": "Sobald eine Karte hinterlegt ist, belastet Louez Ihre Abrechnungen darauf, ohne dass Sie etwas tun müssen.",
+    "near": {
+      "subject": "{storeName}: Ihr offener Saldo nähert sich dem Limit",
+      "title": "Ihr offener Saldo nähert sich dem Limit",
+      "body": "Der Betrag, den {storeName} Louez schuldet und noch nicht bezahlt hat, nähert sich seinem Limit. Sobald es erreicht ist, nimmt Ihr Shop keine neuen Reservierungen mehr an. Fügen Sie eine Abrechnungskarte hinzu, damit Ihre Abrechnungen automatisch bezahlt werden."
+    },
+    "reached": {
+      "subject": "{storeName}: Neue Reservierungen sind pausiert",
+      "title": "Ihr offener Saldo hat sein Limit erreicht",
+      "body": "Der Betrag, den {storeName} Louez schuldet und noch nicht bezahlt hat, hat sein Limit erreicht. Ihr Shop nimmt daher vorerst keine neuen Reservierungen an. Fügen Sie eine Abrechnungskarte hinzu, um wieder Reservierungen anzunehmen."
+    }
+  },
   "teamInvitation": {
     "subject": "{inviterName} lädt Sie ein, {storeName} beizutreten",
     "title": "Team-Einladung",
@@ -236,7 +256,9 @@
     "method": "Methode",
     "reservation": "Reservierung",
     "confirmation": "Ihre Zahlung wurde erfolgreich verarbeitet.",
-    "keepEmail": "Bewahren Sie diese E-Mail als Zahlungsbeleg auf."
+    "keepEmail": "Bewahren Sie diese E-Mail als Zahlungsbeleg auf.",
+    "contractSignature": "Ihr Vertrag ist beigefügt und kann online unterschrieben werden.",
+    "signContract": "Vertrag unterschreiben"
   },
   "paymentFailed": {
     "subject": "Zahlung fehlgeschlagen - Reservierung #{number}",
@@ -299,7 +321,9 @@
     "subject": "Ihr Mietvertrag #{number}",
     "title": "Ihr Mietvertrag",
     "body": "Hier ist der Mietvertrag für Ihre Reservierung #{number}.",
-    "downloadContract": "Vertrag herunterladen"
+    "downloadContract": "Vertrag herunterladen",
+    "signBody": "Hier ist der Mietvertrag für Ihre Reservierung #{number}. Bitte lesen und unterschreiben Sie ihn online, bevor Sie die Ausrüstung abholen.",
+    "signContract": "Vertrag unterschreiben"
   },
   "customMessage": {
     "subject": "Zu Ihrer Reservierung #{number}"

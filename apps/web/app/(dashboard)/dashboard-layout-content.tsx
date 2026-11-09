@@ -4,9 +4,11 @@ import { redirect } from "next/navigation";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages } from "next-intl/server";
 
+import { BillingReturnToastSlot } from "@/components/dashboard/billing-return-toast-slot";
 import { SwRegister } from "@/components/dashboard/sw-register";
 import { FromHelloProvider } from "@/components/fromhello-provider";
 import { GleapProvider } from "@/components/dashboard/gleap-provider";
+import { KlibonTag } from "@/components/klibon-tag";
 import { OpenReplayProvider } from "@/components/openreplay-provider";
 import { PostHogProvider } from "@/components/posthog-provider";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -112,6 +114,9 @@ export const DashboardLayoutContent = async ({ children }: { children: React.Rea
             >
               <div className="bg-background min-h-screen">{children}</div>
               <SwRegister />
+              <KlibonTag />
+              {/* The return from Stripe Checkout lands in the billing settings. */}
+              <BillingReturnToastSlot />
             </GleapProvider>
           </OpenReplayProvider>
         </ThemeProvider>

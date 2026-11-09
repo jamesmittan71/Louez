@@ -12,6 +12,8 @@ import { Button, Logo } from "@louez/ui";
 import { ArrowLeftIcon } from "@louez/ui/icons";
 import { cn } from "@louez/utils";
 
+import { useInstanceConfig } from "@/components/instance-provider";
+
 import {
   onboardingAnalyticsBaseProperties,
   productAnalyticsEvents,
@@ -25,6 +27,7 @@ import { DashboardPreview } from "./dashboard-preview";
 import { FounderNotePanel } from "./founder-note-panel";
 import { PaymentModePanel } from "./payment-mode-panel";
 import { ReeentIntroPanel } from "./reeent-intro-panel";
+import { StepTransition } from "./step-transition";
 import { StorefrontPreview } from "./storefront-preview";
 
 export function OnboardingShell({
@@ -46,6 +49,8 @@ export function OnboardingShell({
 }) {
   const pathname = usePathname();
   const t = useTranslations("onboarding");
+  // The platform admin area is billing only (app/admin): absent when billing is off.
+  const { billingEnabled } = useInstanceConfig();
   const tAccount = useTranslations("dashboard.settings.accountSettings");
   const posthog = usePostHog();
   const stepIndex = getOnboardingStepIndex(steps, pathname);
@@ -81,6 +86,15 @@ export function OnboardingShell({
   ) : isReeentStep ? (
     <ReeentIntroPanel />
   ) : null;
+  const sidePanelKind = isStripeStep
+    ? "payment"
+    : isSourceStep
+      ? "founder-note"
+      : isReeentStep
+        ? "reeent"
+        : isProfileStep
+          ? "dashboard-preview"
+          : "storefront-preview";
 
   const shell = (
     <OnboardingStepsProvider steps={steps}>
@@ -90,7 +104,7 @@ export function OnboardingShell({
           <div className="flex w-full flex-col lg:flex-1">
             <header className="flex items-center justify-between gap-4 px-6 pt-8 lg:px-12">
               <Logo className="h-5 w-auto" />
-              {isPlatformAdmin && (
+              {isPlatformAdmin && billingEnabled && (
                 <Button variant="ghost" size="sm" render={<Link href="/admin" />}>
                   <ArrowLeftIcon className="size-4" />
                   {tAccount("administration")}
@@ -119,7 +133,9 @@ export function OnboardingShell({
                   ))}
                 </div>
 
-                {children}
+                <StepTransition stepKey={pathname} stepIndex={currentStepIndex}>
+                  {children}
+                </StepTransition>
               </div>
             </main>
 
@@ -131,17 +147,22 @@ export function OnboardingShell({
           {/* Right: live preview, bleeds off the right edge like the moodboard.
             Steps that need words swap it for a readable panel instead. */}
           <aside className="bg-background relative hidden flex-1 items-center overflow-hidden border-l lg:flex lg:flex-1">
-            {sidePanel ? (
-              <div className="mx-auto max-h-full w-full max-w-md overflow-y-auto px-10 py-10">
-                {sidePanel}
-              </div>
-            ) : (
-              <div className="w-216 shrink-0 pl-10 xl:pl-16">
-                {/* The profile step is the "Louez is your tool" pitch, so it gets
-                    the dashboard preview rather than an empty storefront. */}
-                {isProfileStep ? <DashboardPreview /> : <StorefrontPreview />}
-              </div>
-            )}
+            {/* Fades only when the panel itself changes: the storefront preview
+                stays put from the store step to the branding step. */}
+            <StepTransition
+              stepKey={sidePanelKind}
+              stepIndex={currentStepIndex}
+              slide={false}
+              className={
+                sidePanel
+                  ? "mx-auto max-h-full w-full max-w-md overflow-y-auto px-10 py-10"
+                  : "w-216 shrink-0 pl-10 xl:pl-16"
+              }
+            >
+              {/* The profile step is the "Louez is your tool" pitch, so it gets
+                  the dashboard preview rather than an empty storefront. */}
+              {sidePanel ?? (isProfileStep ? <DashboardPreview /> : <StorefrontPreview />)}
+            </StepTransition>
           </aside>
         </div>
       </OnboardingPreviewProvider>

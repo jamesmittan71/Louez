@@ -2,6 +2,8 @@ import { getTranslations } from "next-intl/server";
 
 import { SettingsNav } from "@/components/dashboard/settings-nav";
 import { StoreSettingsAccess } from "@/components/dashboard/store-settings-access";
+import { getBillingAccess } from "@/lib/billing/billing-access";
+import { legacyBillingApplies } from "@/lib/billing/policy";
 import { isElectronicInvoicingEnabled } from "@/lib/invoicing/feature";
 import { isCurrentUserPlatformAdmin } from "@/lib/platform-admin";
 import { getCurrentStore } from "@/lib/store-context";
@@ -15,6 +17,8 @@ export default async function SettingsLayout({ children }: { children: React.Rea
   const isPlatformAdmin = await isCurrentUserPlatformAdmin();
   const store = await getCurrentStore();
   const electronicInvoicingEnabled = store ? await isElectronicInvoicingEnabled(store.id) : false;
+  const billingAccess = store ? await getBillingAccess(store, isPlatformAdmin) : null;
+  const legacyBillingEnabled = store ? await legacyBillingApplies(store.id, new Date()) : false;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -25,6 +29,8 @@ export default async function SettingsLayout({ children }: { children: React.Rea
       <div className="flex flex-col gap-4 sm:gap-6 xl:grid xl:grid-cols-[260px_1fr] xl:gap-10">
         <SettingsNav
           isPlatformAdmin={isPlatformAdmin}
+          legacyBillingEnabled={legacyBillingEnabled}
+          billingPagesEnabled={billingAccess !== null}
           electronicInvoicingEnabled={electronicInvoicingEnabled}
         />
         <main className="min-w-0">

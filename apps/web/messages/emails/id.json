@@ -40,7 +40,7 @@
     "title": "Reservasi dikonfirmasi!",
     "body": "Reservasi Anda #{number} telah dikonfirmasi. Berikut ringkasannya:",
     "summary": "Ringkasan",
-    "contractSignature": "Kontrak Anda terlampir dan siap ditandatangani secara online.",
+    "contractSignature": "Kontrak sewa Anda sudah siap. Tanda tangani secara online sebelum mengambil peralatan.",
     "signContract": "Tandatangani kontrak"
   },
   "requestReceived": {
@@ -86,7 +86,9 @@
     "dontForget": "Jangan lupa:",
     "bringId": "Identitas yang sah",
     "bringConfirmation": "Konfirmasi reservasi Anda",
-    "seeTomorrow": "Sampai jumpa besok!"
+    "seeTomorrow": "Sampai jumpa besok!",
+    "contractSignature": "Kontrak sewa Anda belum ditandatangani. Silakan tanda tangani secara online sebelum mengambil peralatan.",
+    "signContract": "Tanda tangani kontrak"
   },
   "reminderReturn": {
     "subject": "Pengingat: pengembalian peralatan pada {date}",
@@ -204,6 +206,22 @@
       "body": "Nomor {number} untuk {storeName} telah dilepas dan tidak aktif lagi. Anda dapat memilih nomor baru kapan saja dari Asisten AI Anda."
     }
   },
+  "balanceLimit": {
+    "balanceLabel": "Saldo belum dibayar:",
+    "limitLabel": "Batas:",
+    "cta": "Tambahkan kartu",
+    "footer": "Setelah kartu tersimpan, Louez akan menagihkan tagihan Anda ke kartu tersebut tanpa perlu tindakan dari Anda.",
+    "near": {
+      "subject": "{storeName}: saldo belum dibayar Anda mendekati batasnya",
+      "title": "Saldo belum dibayar Anda mendekati batasnya",
+      "body": "Jumlah yang terutang oleh {storeName} kepada Louez dan belum dibayar mendekati batasnya. Setelah mencapainya, toko Anda tidak akan menerima reservasi baru. Tambahkan kartu penagihan agar tagihan Anda dibayar secara otomatis."
+    },
+    "reached": {
+      "subject": "{storeName}: reservasi baru dijeda",
+      "title": "Saldo belum dibayar Anda telah mencapai batasnya",
+      "body": "Jumlah yang terutang oleh {storeName} kepada Louez dan belum dibayar telah mencapai batasnya, sehingga toko Anda untuk sementara tidak menerima reservasi baru. Tambahkan kartu penagihan untuk menerima reservasi lagi."
+    }
+  },
   "teamInvitation": {
     "subject": "{inviterName} mengundang Anda untuk bergabung dengan {storeName}",
     "title": "Undangan tim",
@@ -313,7 +331,9 @@
     "subject": "Kontrak sewa Anda #{number}",
     "title": "Kontrak sewa Anda",
     "body": "Berikut adalah kontrak sewa untuk reservasi Anda #{number}.",
-    "downloadContract": "Unduh kontraknya"
+    "downloadContract": "Unduh kontraknya",
+    "signBody": "Berikut kontrak sewa untuk reservasi Anda #{number}. Silakan baca dan tanda tangani secara online sebelum mengambil peralatan.",
+    "signContract": "Tanda tangani kontrak"
   },
   "customMessage": {
     "subject": "Tentang reservasi Anda #{number}"

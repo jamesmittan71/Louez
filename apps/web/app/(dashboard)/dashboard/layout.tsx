@@ -1,4 +1,5 @@
 import { DashboardContentFrame } from "@/components/dashboard/dashboard-content-frame";
+import { PasskeyEnrollment } from "@/components/auth/passkey-enrollment";
 import { Suspense } from "react";
 
 import { eq } from "drizzle-orm";
@@ -16,6 +17,7 @@ import { DashboardBreadcrumbsProvider } from "@/components/dashboard/dashboard-b
 import { DashboardHeaderActions } from "@/components/dashboard/dashboard-header-actions";
 import { DashboardSidebarTrigger } from "@/components/dashboard/dashboard-sidebar-trigger";
 import { DashboardThemeShortcut } from "@/components/dashboard/dashboard-theme-shortcut";
+import { ReservationGateBanner } from "@/components/dashboard/reservation-gate-banner";
 import { ReservationPollingProvider } from "@/components/dashboard/reservation-polling-provider";
 import { SettingsSearchFocus } from "@/components/dashboard/settings-search-focus";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
@@ -28,7 +30,9 @@ import { WhatsNewProvider } from "@/components/shared/whats-new-provider";
 import { getAiCreditsInfo, hasEverUsedAiCredits, microToCredits } from "@/lib/ai/advisor/credits";
 import { isAIChatConfigured } from "@/lib/ai/provider";
 import { auth } from "@/lib/auth";
-import { isStandaloneMode } from "@/lib/deployment";
+import { getBillingAccess } from "@/lib/billing/billing-access";
+import { legacyBillingApplies } from "@/lib/billing/policy";
+import { isSelfHosted } from "@/lib/hosting";
 import { parseKeyboardShortcutOverrides } from "@/lib/keyboard-shortcuts";
 import { getStoreLimits, getStorePlan } from "@/lib/plan-limits";
 import { areAiCreditsEnabled } from "@/lib/plans";
@@ -125,6 +129,7 @@ export default async function DashboardMainLayout({ children }: { children: Reac
     aiCredits,
     marketplaceListingUrl,
     electronicInvoicingEnabled,
+    legacyBillingEnabled,
   ] = await Promise.all([
     getCurrentPlanSlug(store.id),
     getStoreLimits(store.id),
@@ -139,7 +144,9 @@ export default async function DashboardMainLayout({ children }: { children: Reac
     getSidebarAiCredits(store.id),
     getMarketplaceListingUrl(store.id),
     isElectronicInvoicingEnabled(store.id),
+    legacyBillingApplies(store.id, new Date()),
   ]);
+  const billingAccess = await getBillingAccess(store, isPlatformAdmin);
 
   return (
     <KeyboardShortcutsProvider
@@ -172,6 +179,9 @@ export default async function DashboardMainLayout({ children }: { children: Reac
                     aiCredits={aiCredits}
                     marketplaceListingUrl={marketplaceListingUrl}
                     isFromReeent={store.signupOrigin === REEENT_SIGNUP_ORIGIN}
+                    reservationsPaused={
+                      billingAccess !== null && !billingAccess.policy.acceptsReservations
+                    }
                   />
                   <DashboardContentFrame
                     trigger={<DashboardSidebarTrigger />}
@@ -182,19 +192,26 @@ export default async function DashboardMainLayout({ children }: { children: Reac
                         reservationLimits={limits.reservationsThisMonth}
                         planSlug={planSlug}
                         isPlatformAdmin={isPlatformAdmin}
+                        legacyBillingEnabled={legacyBillingEnabled}
+                        billingPagesEnabled={billingAccess !== null}
                         electronicInvoicingEnabled={electronicInvoicingEnabled}
                       />
                     }
                   >
+                    {/* The card gate's banner; nothing outside service mode. */}
+                    <Suspense fallback={null}>
+                      <ReservationGateBanner storeId={store.id} role={store.role} />
+                    </Suspense>
                     {children}
                   </DashboardContentFrame>
                 </DashboardBreadcrumbsProvider>
               </SidebarProvider>
               <Suspense fallback={null}>
                 <WelcomeOverlay />
+                <PasskeyEnrollment />
                 <SettingsSearchFocus />
                 {/* Self-hosted instances only: the cloud never asks. */}
-                {isStandaloneMode() && <StarPrompt />}
+                {isSelfHosted() && <StarPrompt />}
               </Suspense>
             </div>
           </ReservationPollingProvider>

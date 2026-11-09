@@ -8,36 +8,6 @@ export { stripe, getStripe };
 // Connect Account Management
 // ============================================================================
 
-// MCC 7394: "Equipment, Tool, Furniture, and Appliance Rental and Leasing" —
-// the closest generic industry code for a rental business. Prefilled on the
-// connected account so the hosted KYC's Industry dropdown starts on it; the
-// merchant can still pick a more specific vertical in the Stripe form.
-export const RENTAL_MCC = "7394";
-
-/**
- * Normalize a store name into a valid Stripe statement descriptor: what the
- * end customer sees on their card statement. Stripe requires 5–22 characters,
- * at least one letter, no `<>\'"*`. Returns undefined when the name can't
- * make a valid descriptor (better to let the merchant type one in the KYC).
- */
-export function toStatementDescriptor(name: string): string | undefined {
-  const normalized = name
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // strip diacritics
-    .replace(/[<>\\'"*]/g, "")
-    .replace(/[^\x20-\x7e]/g, "") // Stripe only accepts printable ASCII
-    .replace(/\s+/g, " ")
-    .trim()
-    .toUpperCase()
-    .slice(0, 22)
-    .trim();
-
-  if (normalized.length < 5 || !/[a-zA-Z]/.test(normalized)) {
-    return undefined;
-  }
-  return normalized;
-}
-
 interface CreateConnectAccountParams {
   email: string;
   country: string;
@@ -165,7 +135,8 @@ interface CreateCheckoutSessionParams {
   successUrl: string;
   cancelUrl: string;
   applicationFeeAmount?: number; // In cents (platform fee)
-  feeMetadata?: Record<string, string>; // platform fee breakdown, merged into PI metadata
+  /** Fee metadata v4, on the session and on its PaymentIntent (billing fees.md §8). */
+  feeMetadata?: Record<string, string>;
   locale?: string;
   /**
    * Stamped in the session metadata so the expiry webhook can tell a storefront
@@ -276,6 +247,7 @@ export async function createCheckoutSession({
     customer_creation: "always",
     metadata: {
       ...paymentReference.metadata,
+      ...feeMetadata,
       depositAmount: depositAmount.toString(),
       ...(checkoutFlow ? { checkoutFlow } : {}),
     },
@@ -340,7 +312,8 @@ interface CreatePaymentRequestSessionParams {
   cancelUrl: string;
   paymentRequestId: string;
   applicationFeeAmount?: number; // In cents (platform fee)
-  feeMetadata?: Record<string, string>; // platform fee breakdown, merged into PI metadata
+  /** Fee metadata v4, on the session and on its PaymentIntent (billing fees.md §8). */
+  feeMetadata?: Record<string, string>;
   locale?: string;
 }
 
@@ -403,14 +376,15 @@ export async function createPaymentRequestSession({
     expires_at: Math.floor(Date.now() / 1000) + 30 * 60, // 30 minutes
     metadata: {
       ...paymentReference.metadata,
+      ...feeMetadata,
       paymentRequestId,
     },
     payment_intent_data: {
       description: `${description} - ${paymentReference.description}`,
       metadata: {
         ...paymentReference.metadata,
-        paymentRequestId,
         ...feeMetadata,
+        paymentRequestId,
       },
       ...(applicationFeeAmount && applicationFeeAmount > 0
         ? { application_fee_amount: applicationFeeAmount }
@@ -625,6 +599,11 @@ export async function captureDeposit({
     status: paymentIntent.status,
     amountCaptured: paymentIntent.amount_received,
     currency: paymentIntent.currency.toUpperCase(),
+    // The payment row needs it to be matched with Stripe's application fees.
+    chargeId:
+      typeof paymentIntent.latest_charge === "string"
+        ? paymentIntent.latest_charge
+        : (paymentIntent.latest_charge?.id ?? null),
   };
 }
 

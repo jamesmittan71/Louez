@@ -9,19 +9,26 @@ import {
   smsCredits,
   smsTopupTransactions,
   stores,
-  subscriptions,
 } from '@louez/db'
 import { and, eq, sql } from 'drizzle-orm'
 import { nanoid } from 'nanoid'
-import {
-  notifySubscriptionActivated,
-  notifySubscriptionCancelled,
-  notifySmsCreditsTopup,
-} from '@/lib/discord/platform-notifications'
+import { notifySmsCreditsTopup } from '@/lib/discord/platform-notifications'
 import { reconcilePayAsYouGoInvoice } from '@/lib/pay-as-you-go'
+import {
+  handleSubscriptionCheckoutCompleted,
+  handleSubscriptionDeleted,
+  handleSubscriptionUpdated,
+} from '@/lib/stripe/subscription-webhooks'
 import { env } from '@/env'
+import { isBillingEnabled } from '@/lib/billing/mode'
 
 export async function POST(request: Request) {
+  // Every event below is platform billing (plans, top-ups, invoices): an instance that
+  // does not bill its stores has no platform webhook.
+  if (!isBillingEnabled()) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
   const body = await request.text()
   const headersList = await headers()
   const signature = headersList.get('stripe-signature')
@@ -105,76 +112,9 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     return
   }
 
-  // Handle subscription payment
+  // A plan bought through Checkout (lib/stripe/subscription-webhooks.ts).
   if (session.mode !== 'subscription') return
-
-  const { storeId, planSlug } = session.metadata || {}
-  if (!storeId || !planSlug) {
-    console.error('Missing metadata in checkout session')
-    return
-  }
-
-  // Get Stripe subscription details (expand items to get period dates)
-  const stripeSubscription = await stripe.subscriptions.retrieve(
-    session.subscription as string,
-    { expand: ['items.data'] }
-  )
-
-  // In new Stripe API versions, period dates are on subscription items
-  const firstItem = stripeSubscription.items.data[0]
-  const currentPeriodEnd = new Date(firstItem.current_period_end * 1000)
-
-  // Determine status from Stripe (may be 'trialing' if trial days were set)
-  const status: 'active' | 'trialing' =
-    stripeSubscription.status === 'trialing' ? 'trialing' : 'active'
-
-  // Check if subscription already exists
-  const existingSubscription = await db.query.subscriptions.findFirst({
-    where: eq(subscriptions.storeId, storeId),
-  })
-
-  if (existingSubscription) {
-    // Update existing subscription. Subscribing always lands the store on
-    // subscription billing (covers an owner switching from pay-as-you-go).
-    await db
-      .update(subscriptions)
-      .set({
-        planSlug,
-        billingMode: 'subscription',
-        stripeSubscriptionId: stripeSubscription.id,
-        stripeCustomerId: session.customer as string,
-        status,
-        currentPeriodEnd,
-        cancelAtPeriodEnd: false,
-        updatedAt: new Date(),
-      })
-      .where(eq(subscriptions.id, existingSubscription.id))
-  } else {
-    // Create new subscription
-    await db.insert(subscriptions).values({
-      id: nanoid(),
-      storeId,
-      planSlug,
-      billingMode: 'subscription',
-      stripeSubscriptionId: stripeSubscription.id,
-      stripeCustomerId: session.customer as string,
-      status,
-      currentPeriodEnd,
-    })
-  }
-
-  // Platform admin notification
-  const store = await db.query.stores.findFirst({ where: eq(stores.id, storeId) })
-  if (store) {
-    const interval = (session.metadata?.interval as 'monthly' | 'yearly') || 'monthly'
-    notifySubscriptionActivated(
-      { id: store.id, name: store.name, slug: store.slug },
-      planSlug,
-      interval
-    ).catch(() => {})
-  }
-
-  console.log(`Subscription created/updated for store ${storeId} with plan ${planSlug}`)
+  await handleSubscriptionCheckoutCompleted(session)
 }
 
 /**
@@ -420,81 +360,4 @@ async function handleAiCreditInvoiceFailed(invoice: Stripe.Invoice) {
         eq(aiCreditTransactions.status, 'pending'),
       ),
     )
-}
-
-async function handleSubscriptionUpdated(stripeSubscription: Stripe.Subscription) {
-  const subscription = await db.query.subscriptions.findFirst({
-    where: eq(subscriptions.stripeSubscriptionId, stripeSubscription.id),
-  })
-
-  if (!subscription) {
-    console.error(`Subscription not found: ${stripeSubscription.id}`)
-    return
-  }
-
-  // Determine new status
-  let status: 'active' | 'cancelled' | 'past_due' | 'trialing' = 'active'
-  if (stripeSubscription.status === 'past_due') {
-    status = 'past_due'
-  } else if (stripeSubscription.status === 'canceled') {
-    status = 'cancelled'
-  } else if (stripeSubscription.status === 'trialing') {
-    status = 'trialing'
-  }
-
-  // In new Stripe API versions, period dates are on subscription items
-  const firstItem = stripeSubscription.items.data[0]
-  const currentPeriodEnd = new Date(firstItem.current_period_end * 1000)
-
-  await db
-    .update(subscriptions)
-    .set({
-      status,
-      currentPeriodEnd,
-      cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
-      updatedAt: new Date(),
-    })
-    .where(eq(subscriptions.id, subscription.id))
-
-  console.log(`Subscription updated: ${stripeSubscription.id} -> ${status}`)
-}
-
-async function handleSubscriptionDeleted(stripeSubscription: Stripe.Subscription) {
-  const subscription = await db.query.subscriptions.findFirst({
-    where: eq(subscriptions.stripeSubscriptionId, stripeSubscription.id),
-  })
-
-  if (!subscription) {
-    console.error(`Subscription not found: ${stripeSubscription.id}`)
-    return
-  }
-
-  // The free tier no longer exists, so any ended subscription (whether the owner
-  // scheduled a switch to pay-as-you-go, or it simply lapsed/cancelled) falls back to
-  // pay-as-you-go: the store keeps working with no monthly fee and is billed per rental.
-  const scheduledPaygSwitch =
-    stripeSubscription.metadata?.pendingBillingMode === 'pay_as_you_go'
-
-  await db
-    .update(subscriptions)
-    .set({
-      planSlug: 'pay_as_you_go',
-      billingMode: 'pay_as_you_go',
-      status: 'active',
-      stripeSubscriptionId: null,
-      cancelAtPeriodEnd: false,
-      currentPeriodEnd: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(subscriptions.id, subscription.id))
-
-  // Platform admin notification
-  const store = await db.query.stores.findFirst({ where: eq(stores.id, subscription.storeId) })
-  if (store) {
-    notifySubscriptionCancelled({ id: store.id, name: store.name, slug: store.slug }).catch(() => {})
-  }
-
-  console.log(
-    `Subscription ended: ${stripeSubscription.id} → pay-as-you-go${scheduledPaygSwitch ? ' (owner-scheduled)' : ' (lapsed/cancelled)'}`,
-  )
 }

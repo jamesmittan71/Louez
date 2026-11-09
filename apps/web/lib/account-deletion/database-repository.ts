@@ -2,13 +2,19 @@ import "server-only";
 
 import { createHmac } from "node:crypto";
 
-import { db } from "@louez/db";
+import { db, isBillingSyncEnabled, markBillingDirty } from "@louez/db";
 import * as schema from "@louez/db";
-import type { Transaction } from "@louez/db";
-import { and, count, eq, gt, inArray, ne, notInArray, or, sql } from "drizzle-orm";
+import type { BillingMark, Transaction } from "@louez/db";
+import { type Column, and, count, eq, gt, inArray, ne, notInArray, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 import { env } from "@/env";
+import {
+  type FinalSnapshotProblem,
+  alertFinalSnapshotProblems,
+  lockFinalSnapshotFacts,
+  writeFinalSnapshots,
+} from "@/lib/billing-sync/final-snapshots";
 
 import type {
   AccountDeletionContext,
@@ -222,6 +228,76 @@ const getContext = async (userId: string): Promise<AccountDeletionContext | null
       phoneNumberBindings,
     },
   };
+};
+
+/**
+ * The other stores whose billing snapshots the purge changes: stores it unlinks from
+ * a deleted referrer or from the user, referrers that lose a reward row, and stores
+ * where the user was an owner member. Read before the purge writes. The deleted
+ * stores' own final snapshots are written by `writeFinalSnapshots`.
+ */
+const otherStoreBillingMarks = async (
+  transaction: Transaction,
+  userId: string,
+  storeIds: string[],
+): Promise<BillingMark[]> => {
+  if (!isBillingSyncEnabled()) return [];
+  const notDeleted = (column: Column) =>
+    storeIds.length > 0 ? notInArray(column, storeIds) : undefined;
+
+  const unlinked = await transaction
+    .select({ id: schema.stores.id })
+    .from(schema.stores)
+    .where(
+      and(
+        storeIds.length > 0
+          ? or(
+              inArray(schema.stores.referredByStoreId, storeIds),
+              eq(schema.stores.referredByUserId, userId),
+            )
+          : eq(schema.stores.referredByUserId, userId),
+        notDeleted(schema.stores.id),
+      ),
+    );
+  const referrers =
+    storeIds.length > 0
+      ? await transaction
+          .selectDistinct({ id: schema.referralRewards.referrerStoreId })
+          .from(schema.referralRewards)
+          .where(
+            and(
+              inArray(schema.referralRewards.referredStoreId, storeIds),
+              notDeleted(schema.referralRewards.referrerStoreId),
+            ),
+          )
+      : [];
+  const ownedElsewhere = await transaction
+    .select({ id: schema.storeMembers.storeId })
+    .from(schema.storeMembers)
+    .where(
+      and(
+        eq(schema.storeMembers.userId, userId),
+        eq(schema.storeMembers.role, "owner"),
+        notDeleted(schema.storeMembers.storeId),
+      ),
+    );
+
+  return [
+    ...[...unlinked, ...ownedElsewhere].map(
+      ({ id }): BillingMark => ({
+        type: "store",
+        aggregateId: id,
+        storeId: id,
+      }),
+    ),
+    ...referrers.map(
+      ({ id }): BillingMark => ({
+        type: "legacy_store",
+        aggregateId: id,
+        storeId: id,
+      }),
+    ),
+  ];
 };
 
 interface LegalArchiveInput {
@@ -439,7 +515,8 @@ const purgeOwnedData = async (
   context: AccountDeletionContext,
   { beforePurge, reason }: AccountDeletionPurgeOptions,
 ): Promise<{ storesDeleted: number; legalRecordsRetained: number }> => {
-  return db.transaction(async (transaction) => {
+  let finalSnapshotProblems: readonly FinalSnapshotProblem[] = [];
+  const result = await db.transaction(async (transaction) => {
     const currentStores = await transaction
       .select({ id: schema.stores.id })
       .from(schema.stores)
@@ -471,6 +548,13 @@ const purgeOwnedData = async (
     }
 
     await beforePurge();
+    // Before the first plain read, which fixes what the closing snapshots see.
+    await lockFinalSnapshotFacts(transaction, storeIds);
+
+    // Read before the referral rows go; marked last, after the stores rows it updates.
+    const otherMarks = await otherStoreBillingMarks(transaction, context.user.id, storeIds);
+    // Before any row goes: the closing snapshots the billing service bills from.
+    ({ problems: finalSnapshotProblems } = await writeFinalSnapshots(transaction, storeIds));
 
     const legalRecordsRetained = await archiveLegalRecords(transaction, storeIds);
 
@@ -818,6 +902,10 @@ const purgeOwnedData = async (
       await transaction
         .delete(schema.inspections)
         .where(inArray(schema.inspections.storeId, storeIds));
+      // Who used each rented unit and their measurements: personal data too.
+      await transaction
+        .delete(schema.reservationItemDetails)
+        .where(inArray(schema.reservationItemDetails.storeId, storeIds));
       await transaction
         .delete(schema.reservationItems)
         .where(
@@ -831,6 +919,10 @@ const purgeOwnedData = async (
       await transaction
         .delete(schema.reservations)
         .where(inArray(schema.reservations.storeId, storeIds));
+      // Custom field values are customers' personal data too.
+      await transaction
+        .delete(schema.customerFieldValues)
+        .where(inArray(schema.customerFieldValues.storeId, storeIds));
       await transaction.delete(schema.customers).where(inArray(schema.customers.storeId, storeIds));
       await transaction
         .delete(schema.productUnitEvents)
@@ -862,6 +954,12 @@ const purgeOwnedData = async (
         .delete(schema.variantDefinitions)
         .where(inArray(schema.variantDefinitions.storeId, storeIds));
       await transaction
+        .delete(schema.customerFieldTargets)
+        .where(inArray(schema.customerFieldTargets.storeId, storeIds));
+      await transaction
+        .delete(schema.customerFieldDefinitions)
+        .where(inArray(schema.customerFieldDefinitions.storeId, storeIds));
+      await transaction
         .delete(schema.categories)
         .where(inArray(schema.categories.storeId, storeIds));
       await transaction
@@ -889,6 +987,12 @@ const purgeOwnedData = async (
         .delete(schema.aiCreditTransactions)
         .where(inArray(schema.aiCreditTransactions.storeId, storeIds));
       await transaction.delete(schema.aiCredits).where(inArray(schema.aiCredits.storeId, storeIds));
+      await transaction
+        .delete(schema.voiceToolExecutionsTable)
+        .where(inArray(schema.voiceToolExecutionsTable.conversationId, advisorConversationIds));
+      await transaction
+        .delete(schema.voiceSessionsTable)
+        .where(inArray(schema.voiceSessionsTable.storeId, storeIds));
       await transaction
         .delete(schema.aiAdvisorMessages)
         .where(inArray(schema.aiAdvisorMessages.storeId, storeIds));
@@ -955,11 +1059,18 @@ const purgeOwnedData = async (
         });
     }
 
+    // Every writer locks its domain row before its queue row: marking the other stores
+    // earlier would deadlock with a store update that marks after writing.
+    await markBillingDirty(transaction, otherMarks);
+
     return {
       storesDeleted: storeIds.length,
       legalRecordsRetained,
     };
   });
+  // Only once the purge has committed: billing facts it dropped, or may not deliver.
+  await alertFinalSnapshotProblems(finalSnapshotProblems);
+  return result;
 };
 
 export const accountDeletionRepository: AccountDeletionRepository = {

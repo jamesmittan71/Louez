@@ -3,9 +3,19 @@ import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 import { validateReservationContract, confirmMarketplaceBookingAttempt } from "@louez/api/services";
-import { ConsumableStockError, consumeReservationStock, db } from "@louez/db";
+import {
+  ConsumableStockError,
+  changeReservationStatus,
+  consumeReservationStock,
+  db,
+  toWholeSeconds,
+  type ReservationBillingEffect,
+} from "@louez/db";
 import { paymentRequests, reservationActivity, reservations, stores } from "@louez/db";
 
+import { runReservationEffects } from "@/lib/billing/reservation-effects";
+import { readFeeMetadata } from "@/lib/billing-sync/fee-metadata";
+import { reservationTotalsMinor } from "@/lib/billing-sync/money";
 import {
   notifyPaymentReceived,
   notifyReservationConfirmed,
@@ -24,7 +34,10 @@ import { productAnalyticsEvents } from "@/lib/product-analytics/analytics-events
 import { getStorefrontUrl } from "@/lib/storefront-url";
 import { fromStripeCents, getCheckoutSession } from "@/lib/stripe";
 import { stripe } from "@/lib/stripe/client";
-import { claimCompletedCheckoutPayment } from "@/lib/stripe/payment-completion";
+import {
+  claimCompletedCheckoutPayment,
+  paymentInsuranceShareMinor,
+} from "@/lib/stripe/payment-completion";
 import { evaluateReservationRules } from "@/lib/utils/reservation-rules";
 
 export type CheckoutPaymentCompletionSource = "webhook" | "return";
@@ -39,8 +52,15 @@ export interface CheckoutPaymentStripeDetails {
   currency: string;
   paymentIntentId: string | null;
   chargeId: string | null;
+  /** The charge's `created` time, when the PaymentIntent was read with its charge. */
+  chargeCreatedAt: Date | null;
   stripeCustomerId: string | null;
   stripePaymentMethodId: string | null;
+  /** The connected account the session was created on. */
+  stripeAccountId: string | null;
+  /** The PaymentIntent's metadata: older sessions put the fee keys only there. */
+  paymentIntentMetadata: Record<string, string> | null;
+  sessionMetadata: Record<string, string> | null;
 }
 
 export type CompleteCheckoutPaymentInput =
@@ -56,7 +76,7 @@ export type CompleteCheckoutPaymentInput =
       source: "webhook";
       reservationId: string;
       stripe: CheckoutPaymentStripeDetails;
-      /** Session created from a dashboard payment request, marked completed. */
+      /** Session created from a dashboard payment request, completed with the payment. */
       paymentRequestId?: string | null;
       /** Webhook-only analytics facts (platform fees, PAYG). */
       analytics?: Record<string, unknown>;
@@ -79,12 +99,49 @@ const loadReservationForCompletion = async (reservationId: string) =>
     with: { store: true, customer: true, items: true },
   });
 
-const confirmPaidReservationOrThrow = async (params: {
+/**
+ * The insurance share of a session created before fee metadata v4 carried it: a custom
+ * payment request has none, everything else is rental money (billing fees.md §4).
+ */
+const insuranceShareAtClaim = async (
+  reservation: ReservationRow,
+  grossMinor: number,
+  paymentRequestId: string | null,
+): Promise<number | null> => {
+  const request = paymentRequestId
+    ? await db.query.paymentRequests.findFirst({
+        where: and(
+          eq(paymentRequests.id, paymentRequestId),
+          eq(paymentRequests.storeId, reservation.storeId),
+        ),
+        columns: { type: true },
+      })
+    : undefined;
+  return paymentInsuranceShareMinor(
+    request?.type === "custom" ? "custom_request" : "rental",
+    grossMinor,
+    () =>
+      reservationTotalsMinor({
+        reservation,
+        storeSettings: reservation.store.settings,
+        items: reservation.items,
+      }),
+  );
+};
+
+/**
+ * Confirms a paid pending reservation as the `payment` actor, with its
+ * `confirmed` activity row. Returns false when it was not pending. Exported for
+ * its database test.
+ */
+export const confirmPaidReservationOrThrow = async (params: {
   reservationId: string;
   storeId: string;
   stripeCustomerId: string | null;
   stripePaymentMethodId: string | null;
   depositStatus: DepositStatus;
+  /** The metadata of the `confirmed` activity row. */
+  activityMetadata: Record<string, unknown>;
 }): Promise<boolean> => {
   // Keep payment/deposit metadata even when stock consumption rolls back. A
   // merchant can then restock and confirm the paid reservation manually.
@@ -104,50 +161,48 @@ const confirmPaidReservationOrThrow = async (params: {
       ),
     );
 
-  return db.transaction(
-    async (tx) => {
-      const [locked] = await tx
-        .select({ status: reservations.status })
-        .from(reservations)
-        .where(
-          and(eq(reservations.id, params.reservationId), eq(reservations.storeId, params.storeId)),
-        )
-        .for("update");
+  const result = await db.transaction(
+    async (tx): Promise<{ confirmed: boolean; effects: ReservationBillingEffect[] }> => {
+      const change = await changeReservationStatus(tx, {
+        reservationId: params.reservationId,
+        storeId: params.storeId,
+        to: "confirmed",
+        actor: "payment",
+        actorUserId: null,
+        expectedFrom: "pending",
+        beforeWrite: (lockedTx) =>
+          checkExistingReservationInventory(lockedTx, params.reservationId, params.storeId),
+        activity: { metadata: params.activityMetadata },
+      });
 
-      if (!locked) {
-        return false;
-      }
-      if (locked.status === "confirmed") {
-        await consumeReservationStock(tx, params.reservationId, params.storeId);
-        return false;
-      }
-      if (locked.status !== "pending") {
-        return false;
+      if (!change.changed) {
+        // Already confirmed, by the other completion path or the merchant: make
+        // sure its consumables were taken. Consuming twice changes nothing.
+        if (change.from === "confirmed") {
+          await consumeReservationStock(tx, params.reservationId, params.storeId);
+        }
+        return { confirmed: false, effects: [] };
       }
 
-      await checkExistingReservationInventory(tx, params.reservationId, params.storeId);
-      await consumeReservationStock(tx, params.reservationId, params.storeId);
       await tx
         .update(reservations)
         .set({
-          status: "confirmed",
           stripeCustomerId: params.stripeCustomerId,
           stripePaymentMethodId: params.stripePaymentMethodId,
           depositStatus: params.depositStatus,
-          updatedAt: new Date(),
         })
         .where(
-          and(
-            eq(reservations.id, params.reservationId),
-            eq(reservations.storeId, params.storeId),
-            eq(reservations.status, "pending"),
-          ),
+          and(eq(reservations.id, params.reservationId), eq(reservations.storeId, params.storeId)),
         );
 
-      return true;
+      return { confirmed: true, effects: change.effects };
     },
     { isolationLevel: "read committed" },
   );
+
+  // The webhook records a paid checkout's fee itself, so this is empty today.
+  await runReservationEffects(result.effects);
+  return result.confirmed;
 };
 
 /**
@@ -249,7 +304,18 @@ const runCheckoutPaymentCompletion = async ({
         ? "card_saved"
         : "pending"
       : "none";
-  const paidAt = new Date();
+  // Whole seconds, as the status change stores the `confirmed` row: MySQL would
+  // round this one up, and the timeline would show the payment after it.
+  const paidAt = toWholeSeconds(new Date());
+
+  // v3 fee keys were written on the PaymentIntent only; v4 is on both.
+  const feeFacts =
+    readFeeMetadata(stripeDetails.paymentIntentMetadata) ??
+    readFeeMetadata(stripeDetails.sessionMetadata);
+  const grossMinor = stripeDetails.amountTotalCents;
+  const insuranceShareMinor =
+    feeFacts?.insuranceShareMinor ??
+    (await insuranceShareAtClaim(reservation, grossMinor, paymentRequestId ?? null));
 
   const paymentClaim = await claimCompletedCheckoutPayment({
     reservationId,
@@ -259,7 +325,19 @@ const runCheckoutPaymentCompletion = async ({
     stripePaymentIntentId: stripeDetails.paymentIntentId,
     stripeChargeId: stripeDetails.chargeId,
     stripePaymentMethodId: stripeDetails.stripePaymentMethodId,
-    paidAt,
+    stripeAccountId: stripeDetails.stripeAccountId,
+    claimedAt: paidAt,
+    // The charge time, so a payment made just before midnight stays in its month.
+    paidAt: stripeDetails.chargeCreatedAt ?? paidAt,
+    grossMinor,
+    insuranceShareMinor,
+    origin: paymentRequestId
+      ? "payment_request"
+      : stripeDetails.sessionMetadata?.checkoutFlow === "storefront_checkout"
+        ? "checkout"
+        : "customer_session",
+    paymentRequestId: paymentRequestId ?? null,
+    feeFacts,
   });
 
   await db.transaction((tx) =>
@@ -279,13 +357,6 @@ const runCheckoutPaymentCompletion = async ({
         ? "checkout_success_fallback"
         : "checkout_success_existing_payment";
   await tryGenerateInvoiceForPayment(paymentClaim.paymentId, invoiceSource);
-
-  if (paymentRequestId) {
-    await db
-      .update(paymentRequests)
-      .set({ status: "completed", completedAt: paidAt })
-      .where(eq(paymentRequests.id, paymentRequestId));
-  }
 
   if (paymentClaim.claimed) {
     await db.insert(reservationActivity).values({
@@ -320,6 +391,12 @@ const runCheckoutPaymentCompletion = async ({
     );
   }
 
+  // Pure, so the activity row can be written with the status change.
+  const validationWarnings = evaluateReservationRules({
+    startDate: reservation.startDate,
+    endDate: reservation.endDate,
+    storeSettings: store.settings,
+  });
   const reservationConfirmed = await confirmPaidReservation(
     {
       reservationId,
@@ -327,6 +404,16 @@ const runCheckoutPaymentCompletion = async ({
       stripeCustomerId: stripeDetails.stripeCustomerId,
       stripePaymentMethodId: stripeDetails.stripePaymentMethodId,
       depositStatus,
+      activityMetadata: {
+        source: "online_payment",
+        depositAmount,
+        depositStatus,
+        cardSaved: Boolean(stripeDetails.stripePaymentMethodId),
+        ...(validationWarnings.length > 0 && {
+          validationWarnings,
+          validationWarningsCount: validationWarnings.length,
+        }),
+      },
     },
     source,
   );
@@ -365,11 +452,6 @@ const runCheckoutPaymentCompletion = async ({
   }
 
   if (reservationConfirmed) {
-    const validationWarnings = evaluateReservationRules({
-      startDate: reservation.startDate,
-      endDate: reservation.endDate,
-      storeSettings: store.settings,
-    });
     if (validationWarnings.length > 0) {
       log.warn({
         checkout: {
@@ -381,23 +463,6 @@ const runCheckoutPaymentCompletion = async ({
         },
       });
     }
-
-    await db.insert(reservationActivity).values({
-      id: nanoid(),
-      reservationId,
-      activityType: "confirmed",
-      metadata: {
-        source: "online_payment",
-        depositAmount,
-        depositStatus,
-        cardSaved: Boolean(stripeDetails.stripePaymentMethodId),
-        ...(validationWarnings.length > 0 && {
-          validationWarnings,
-          validationWarningsCount: validationWarnings.length,
-        }),
-      },
-      createdAt: new Date(),
-    });
 
     dispatchNotification("reservation_confirmed", {
       store: toAdminNotificationStore(store),
@@ -531,17 +596,28 @@ export const completeCheckoutPayment = async (
 
   let paymentIntentId: string | null = null;
   let chargeId: string | null = null;
+  let chargeCreatedAt: Date | null = null;
   let stripeCustomerId: string | null = null;
   let stripePaymentMethodId: string | null = null;
+  let paymentIntentMetadata: Record<string, string> | null = null;
   if (session.paymentIntentId) {
-    const paymentIntent = await stripe.paymentIntents.retrieve(session.paymentIntentId, {
-      stripeAccount: store.stripeAccountId,
-    });
+    const paymentIntent = await stripe.paymentIntents.retrieve(
+      session.paymentIntentId,
+      { expand: ["latest_charge"] },
+      { stripeAccount: store.stripeAccountId },
+    );
     paymentIntentId = paymentIntent.id;
-    chargeId = typeof paymentIntent.latest_charge === "string" ? paymentIntent.latest_charge : null;
+    const charge = paymentIntent.latest_charge;
+    if (typeof charge === "string") {
+      chargeId = charge;
+    } else if (charge) {
+      chargeId = charge.id;
+      chargeCreatedAt = new Date(charge.created * 1000);
+    }
     stripeCustomerId = typeof paymentIntent.customer === "string" ? paymentIntent.customer : null;
     stripePaymentMethodId =
       typeof paymentIntent.payment_method === "string" ? paymentIntent.payment_method : null;
+    paymentIntentMetadata = paymentIntent.metadata;
   }
   if (!stripeCustomerId && session.customerId) {
     stripeCustomerId = session.customerId;
@@ -561,8 +637,14 @@ export const completeCheckoutPayment = async (
       currency: session.currency,
       paymentIntentId,
       chargeId,
+      chargeCreatedAt,
       stripeCustomerId,
       stripePaymentMethodId,
+      stripeAccountId: store.stripeAccountId,
+      paymentIntentMetadata,
+      sessionMetadata: session.metadata,
     },
+    // Louez wrote it on the session it created for the request.
+    paymentRequestId: session.metadata?.paymentRequestId ?? null,
   });
 };

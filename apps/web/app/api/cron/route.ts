@@ -5,17 +5,26 @@ import { runMarketplaceDefaultPublication } from "@louez/api/services";
 
 import { aggregateDailyAnalytics, cleanupOldAnalyticsData } from "@/lib/analytics/aggregation";
 import { purgeExpiredLegalRetentionRecords } from "@/lib/account-deletion/retention-cleanup";
-import { createError, useLogger, withEvlog } from "@/lib/evlog";
+import { createError, log, useLogger, withEvlog } from "@/lib/evlog";
 import { cleanExpiredCache, refreshAllStoresCache } from "@/lib/google-places/cache";
+import { reconcileVoiceSessions } from "@/lib/ai/phone/live-reconciliation";
 import { processVoiceNumberRenewals } from "@/lib/ai/phone/number-renewals";
 import { processCalendarSyncQueue } from "@/lib/integrations/calendar/sync";
 import { pollSuperPdpInvoiceEvents } from "@/lib/invoicing/superpdp-events";
 import { processInvoiceTransmissionQueue } from "@/lib/invoicing/superpdp-transmission";
-import { runMonthlyPayAsYouGoBilling } from "@/lib/pay-as-you-go";
+import { runMonthlyBillingCatchUp } from "@/lib/pay-as-you-go/legacy-run";
+import { reportLegacyFees } from "@/lib/pay-as-you-go/legacy-fee-repair";
+import { isLegacyFeeReportTick } from "@/lib/pay-as-you-go/legacy-fee-repair-core";
+import { checkBillableAt } from "@/lib/billing/billable-at-check";
+import { isBillingEnabled } from "@/lib/billing/mode";
+import { isBillingSyncEnabled } from "@/lib/billing-sync/config";
 import { processReminders } from "@/lib/reminders/automation";
 import { processReviewRequests } from "@/lib/review-booster/automation";
 
 import { env } from "@/env";
+
+import { billingSyncTasks } from "./billing-sync-tasks";
+import { runIsolatedTasks } from "./isolated-tasks";
 
 /**
  * Unified cron endpoint - called every minute
@@ -32,6 +41,16 @@ import { env } from "@/env";
  * - Analytics cleanup: daily at 3:30 AM UTC (removes raw data older than 90 days)
  * - Cache cleanup: daily at 4:00 AM UTC
  * - Expired legal archive cleanup: daily at 4:30 AM UTC
+ * - Legacy fee report and billable_at check: daily at 4:45 AM UTC, billing only
+ *   (lists fee effects that may have been lost; writes nothing)
+ * - Pay-as-you-go billing, billing only: every minute. From 5:00 AM UTC on the 1st it
+ *   bills the previous month's stores that were due at 5:00 and that no run has reached
+ *   yet, so the first call after a missed or failed run catches it up
+ *   (lib/pay-as-you-go/legacy-run.ts)
+ * - Billing service sync, only with LOUEZ_BILLING=cloud and BILLING_SERVICE_URL: the
+ *   relay, the heartbeat, the manifests and the sweep, every minute. The manifests
+ *   decide themselves when to send; the sweep runs once a day, retried from 2:00 AM
+ *   UTC until one finishes
  *
  * vercel.json:
  *   "crons": [{ "path": "/api/cron", "schedule": "* * * * *" }]
@@ -69,7 +88,44 @@ async function handleCron(request: Request) {
     },
   });
 
+  // Pay-as-you-go billing, on an instance that bills its stores (LOUEZ_BILLING=cloud),
+  // and the billing service sync: started first and awaited last, so a long run never
+  // delays the other tasks and a failing task never stops them.
+  const payAsYouGoBilling = isBillingEnabled()
+    ? runIsolatedTasks(
+        [
+          {
+            task: "pay-as-you-go-billing",
+            key: "payAsYouGoBilling",
+            run: () => runMonthlyBillingCatchUp(now),
+          },
+        ],
+        { request: logger, event: log },
+      )
+    : null;
+  const billingSync = isBillingSyncEnabled()
+    ? runIsolatedTasks(billingSyncTasks(now), { request: logger, event: log })
+    : null;
+
   try {
+    // Legacy fee report and billable_at check: daily at 4:45 AM UTC, only on an
+    // instance that bills its stores. They run first, each on its own, so neither
+    // stops the other tasks. The results hold counts only; ids go to the log.
+    if (isBillingEnabled() && isLegacyFeeReportTick(now)) {
+      const nightly = await runIsolatedTasks(
+        [
+          { task: "legacy-fee-report", key: "legacyFeeReport", run: () => reportLegacyFees(now) },
+          { task: "billable-at-check", key: "billableAtCheck", run: () => checkBillableAt() },
+        ],
+        { request: logger, event: log },
+      );
+      tasks.push(...nightly.tasks);
+      Object.assign(results, nightly.results);
+    }
+
+    tasks.push("voice-sessions");
+    results.voiceSessions = await reconcileVoiceSessions(now);
+
     tasks.push("rental-extensions");
     results.rentalExtensions = await reconcileRentalExtensions();
 
@@ -160,11 +216,11 @@ async function handleCron(request: Request) {
       results.voiceNumberRenewals = await processVoiceNumberRenewals(now);
     }
 
-    // Pay-as-you-go billing: 1st of each month at 5:00 AM UTC (bills previous
-    // month). Gated in UTC to match the UTC-based billing-month math.
-    if (now.getUTCDate() === 1 && now.getUTCHours() === 5 && now.getUTCMinutes() === 0) {
-      tasks.push("pay-as-you-go-billing");
-      results.payAsYouGoBilling = await runMonthlyPayAsYouGoBilling(now);
+    for (const background of [payAsYouGoBilling, billingSync]) {
+      if (!background) continue;
+      const finished = await background;
+      tasks.push(...finished.tasks);
+      Object.assign(results, finished.results);
     }
 
     logger.set({
@@ -180,6 +236,9 @@ async function handleCron(request: Request) {
       ...results,
     });
   } catch (error) {
+    // runIsolatedTasks never throws; let the billing and the sync finish before the
+    // response.
+    await Promise.all([payAsYouGoBilling, billingSync]);
     const cronError = error instanceof Error ? error : new Error("Unknown cron error");
 
     logger.error(cronError, { tasks });

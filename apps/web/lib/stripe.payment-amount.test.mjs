@@ -87,9 +87,11 @@ test("a Stripe session is expired when recording its payment fails", async () =>
     buildStripeLineItems,
     getCheckoutChargeAmount,
     getStorefrontUrl: () => "https://shop.example.test",
-    getStoreBilling: async () => ({}),
-    planStripeFees: async () => ({ applicationFeeCents: 0 }),
+    planApplicationFee: async () => ({ applicationFeeCents: 0 }),
     buildFeeMetadata: () => ({}),
+    paymentInsuranceShareMinor: () => 0,
+    toMinorOrThrow: () => 0,
+    markReservation: async () => {},
     toStripeCents: (amount) => Math.round(amount * 100),
     createCheckoutSession: async () => ({
       url: "https://stripe.example.test/pay",

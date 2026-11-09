@@ -4,6 +4,8 @@ import { CheckSolidIcon, SparklesSolidIcon } from '@louez/ui/icons'
 
 import { useEffect, useState } from 'react'
 
+import { useQuery } from '@tanstack/react-query'
+
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -17,6 +19,7 @@ import {
   Check,
   CheckCircle,
   ChevronRight,
+  CreditCard,
   Crown,
   ExternalLink,
   FileText,
@@ -55,8 +58,10 @@ import {
 } from '@louez/ui';
 import { cn } from '@louez/utils';
 
+import { readAffiliateReferral } from '@/lib/acquisition/klibon-browser';
 import {
   CURRENCY_SYMBOLS,
+  PAY_AS_YOU_GO_PLAN,
   SUPPORTED_CURRENCIES,
   getYearlyPrice,
   isPlanAvailable,
@@ -66,11 +71,17 @@ import {
 
 import {
   cancelSubscription,
+  changeSubscriptionPlan,
   createCheckoutSession,
+  keepCurrentPlan,
   openCustomerPortal,
   reactivateSubscription,
 } from './actions';
+import { PlanChangeSummary } from './plan-change-summary';
+import { planButtonAction } from './util.plan-button';
+import { canConfirmPlanChange, planChangePreviewView } from './util.plan-change-preview';
 import { useFormatLocale } from '@/hooks/use-format-locale';
+import { subscriptionQueries } from '@/lib/queries/subscription.queries';
 
 interface Subscription {
   id: string;
@@ -83,6 +94,15 @@ interface Subscription {
   plan: Plan | undefined;
   billingInterval: 'monthly' | 'yearly' | null;
   billingCurrency: Currency | null;
+  /**
+   * The plan change that starts at the end of the paid period, read from Stripe's
+   * schedule (getSubscriptionWithPlan); null without one, or when Stripe could not be read.
+   */
+  pendingPlanChange?: {
+    planSlug: string;
+    interval: 'monthly' | 'yearly';
+    at: Date;
+  } | null;
 }
 
 interface UsageStats {
@@ -95,7 +115,7 @@ interface UsageStats {
   smsLimit: number | null;
 }
 
-interface SubscriptionManagementProps {
+export interface SubscriptionManagementProps {
   subscription: Subscription | null;
   plans: Plan[];
   canAccessBillingPortal: boolean;
@@ -108,6 +128,28 @@ interface SubscriptionManagementProps {
   pendingBillingMode?: string | null;
   /** True when a pay-as-you-go store is viewing this grid to pick a plan. */
   showBackToPayAsYouGo?: boolean;
+  /**
+   * True while the store's row holds a live Stripe subscription: the plan buttons then
+   * change that subscription's plan, after a confirmation, instead of opening a Checkout.
+   */
+  hasLiveSubscription?: boolean;
+  /**
+   * For a store the billing service bills: the service's words for the offer it pays
+   * as it goes (the policy's `labels.offer`), shown on the pay-as-you-go card instead
+   * of Louez's own pricing; null until Louez holds a policy.
+   */
+  offerLabel?: string | null;
+  /** The billing settings page, when the viewer may open the billing pages. */
+  billingSettingsHref?: string;
+}
+
+/** A plan change waiting for the owner's confirmation, as its card showed it. */
+interface PendingPlanChange {
+  plan: Plan;
+  interval: 'monthly' | 'yearly';
+  currency: Currency;
+  /** The card's price, discount included. */
+  price: number;
 }
 
 // Helper function to format price with currency
@@ -135,23 +177,52 @@ export function SubscriptionManagement({
   discountDurationMonths = 0,
   pendingBillingMode = null,
   showBackToPayAsYouGo = false,
+  hasLiveSubscription = false,
+  offerLabel,
+  billingSettingsHref,
 }: SubscriptionManagementProps) {
   const locale = useLocale();
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isYearly, setIsYearly] = useState(false);
-  // Default currency based on locale: EUR for French, USD for all others
+  // A live subscription keeps its currency, which Stripe cannot change. Otherwise the
+  // default follows the locale: EUR for French, USD for all others.
   const [currency, setCurrency] = useState<Currency>(
-    locale === 'fr' ? 'eur' : 'usd',
+    hasLiveSubscription && subscription?.billingCurrency
+      ? subscription.billingCurrency
+      : locale === 'fr'
+        ? 'eur'
+        : 'usd',
   );
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [pendingChange, setPendingChange] = useState<PendingPlanChange | null>(null);
+  // Why the plan change failed, shown in its dialog, where the owner is looking.
+  const [changeError, setChangeError] = useState<string | null>(null);
   const router = useRouter();
+  // Stripe's preview of the change, read as its dialog opens.
+  const previewQuery = useQuery(
+    subscriptionQueries.planChangePreview(
+      pendingChange && {
+        planSlug: pendingChange.plan.slug,
+        interval: pendingChange.interval,
+        currency: pendingChange.currency,
+      },
+    ),
+  );
+  const changePreview = planChangePreviewView(previewQuery);
   const t = useTranslations('dashboard.settings.subscription');
   const { dateFns: dateLocale } = useFormatLocale();
   const tCommon = useTranslations('common');
+  const tBilling = useTranslations('dashboard.settings.billing');
   const tErrors = useTranslations('errors');
 
   const hasDiscount = discountPercent > 0;
+
+  /** An action's `errors.*` key in the owner's language, the generic error otherwise. */
+  const errorText = (key: string) => {
+    const name = key.replace(/^errors\./, '');
+    return tErrors.has(name) ? tErrors(name) : tErrors('generic');
+  };
 
   useEffect(() => {
     if (showSuccess || showCanceled) {
@@ -170,6 +241,7 @@ export function SubscriptionManagement({
         planSlug,
         interval: isYearly ? 'yearly' : 'monthly',
         currency,
+        affiliateReferral: readAffiliateReferral(),
       });
 
       if (result.url) {
@@ -179,6 +251,46 @@ export function SubscriptionManagement({
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Une erreur est survenue');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const closeChangeDialog = () => {
+    setPendingChange(null);
+    setChangeError(null);
+  };
+
+  // A refused change, such as a declined card, keeps the dialog open with its reason. The
+  // page refreshes behind it, in case Stripe could not take back what the change undid.
+  const handleChangePlan = async () => {
+    if (!pendingChange) return;
+    setLoading(pendingChange.plan.slug);
+    setError(null);
+    setChangeError(null);
+    try {
+      // On pay-as-you-go again, the change opens the plan's Checkout: it carries the code.
+      const result = await changeSubscriptionPlan(
+        {
+          planSlug: pendingChange.plan.slug,
+          interval: pendingChange.interval,
+          currency: pendingChange.currency,
+        },
+        readAffiliateReferral(),
+      );
+      if ('error' in result) {
+        setChangeError(result.error);
+        router.refresh();
+      } else if ('url' in result && result.url) {
+        // Stripe had ended the subscription: the plan is bought through Checkout.
+        closeChangeDialog();
+        window.location.href = result.url;
+      } else {
+        closeChangeDialog();
+        router.refresh();
+      }
+    } catch {
+      setChangeError('errors.generic');
     } finally {
       setLoading(null);
     }
@@ -213,6 +325,21 @@ export function SubscriptionManagement({
     } catch (err) {
       setShowCancelModal(false);
       setError(err instanceof Error ? err.message : 'Une erreur est survenue');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleKeepCurrentPlan = async () => {
+    setLoading('keep');
+    setError(null);
+    try {
+      const result = await keepCurrentPlan();
+      if ('error' in result) setError(result.error);
+      // On an error too: the page shows the plan as it is, such as one that has started.
+      router.refresh();
+    } catch {
+      setError('errors.generic');
     } finally {
       setLoading(null);
     }
@@ -341,14 +468,21 @@ export function SubscriptionManagement({
     return list;
   };
 
-  // Get the current plan info
+  // Get the current plan info. `plans` lists only the plans to buy, so a store on
+  // pay-as-you-go, or with no row, falls back to the pay-as-you-go pseudo-plan.
   const currentPlanSlug = subscription?.planSlug || 'pay_as_you_go';
   const currentPlan =
     subscription?.plan ||
     plans.find((p) => p.slug === currentPlanSlug) ||
-    plans[0];
+    (currentPlanSlug === 'pay_as_you_go' ? PAY_AS_YOU_GO_PLAN : plans[0]);
+  const showsOfferLabel = offerLabel !== undefined && currentPlan?.price === 0;
   const hasPaidSubscription =
     subscription?.stripeSubscriptionId && currentPlan?.price !== 0;
+  const pendingPlanChange = subscription?.pendingPlanChange ?? null;
+  const pendingPlanName = pendingPlanChange
+    ? (plans.find((p) => p.slug === pendingPlanChange.planSlug)?.name ??
+      pendingPlanChange.planSlug)
+    : null;
 
   return (
     <div className="space-y-8">
@@ -368,7 +502,7 @@ export function SubscriptionManagement({
         <Alert variant="error">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>{tCommon('error')}</AlertTitle>
-          <AlertDescription>{tErrors.has(error.replace(/^errors\./, '')) ? tErrors(error.replace(/^errors\./, '')) : tErrors('generic')}</AlertDescription>
+          <AlertDescription>{errorText(error)}</AlertDescription>
         </Alert>
       )}
 
@@ -414,6 +548,32 @@ export function SubscriptionManagement({
               {pendingBillingMode === 'pay_as_you_go'
                 ? t('payAsYouGo.cancelSwitch')
                 : t('reactivate')}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* A plan change that would have left a credit starts at the end of the paid
+          period; until then the store keeps its plan, and may keep it for good. */}
+      {pendingPlanChange && pendingPlanName && (
+        <Alert variant="info">
+          <CalendarDays className="h-4 w-4" />
+          <AlertDescription>
+            {t('pendingPlanChange', {
+              currentPlan: currentPlan?.name ?? '',
+              date: format(pendingPlanChange.at, 'dd MMMM yyyy', {
+                locale: dateLocale,
+              }),
+              newPlan: pendingPlanName,
+              interval: pendingPlanChange.interval,
+            })}
+            <Button
+              variant="link"
+              className="ml-2 h-auto p-0"
+              onClick={handleKeepCurrentPlan}
+              disabled={loading !== null}
+            >
+              {t('keepCurrentPlan', { plan: currentPlan?.name ?? '' })}
             </Button>
           </AlertDescription>
         </Alert>
@@ -480,32 +640,44 @@ export function SubscriptionManagement({
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Pricing info - use actual billing currency and interval */}
-          <div className="flex items-baseline gap-1">
-            <span className="text-4xl font-bold">
-              {formatPrice(
-                currentPlan?.price
-                  ? subscription?.billingInterval === 'yearly'
-                    ? getYearlyPrice(currentPlan)
-                    : currentPlan.price
-                  : 0,
-                subscription?.billingCurrency || currency,
+          {/* The billing service's words for pay-as-you-go, for a store it bills;
+              otherwise the price, in the actual billing currency and interval. */}
+          {showsOfferLabel ? (
+            <div className="space-y-1">
+              <p className="text-muted-foreground text-sm">{tBilling('offerTitle')}</p>
+              {offerLabel ? (
+                <p className="text-2xl font-bold">{offerLabel}</p>
+              ) : (
+                <p className="text-muted-foreground text-sm">{tBilling('offerPending')}</p>
               )}
-            </span>
-            {currentPlan?.price !== 0 && (
-              <span className="text-muted-foreground">
-                /{' '}
-                {subscription?.billingInterval === 'yearly'
-                  ? t('year')
-                  : t('month')}
+            </div>
+          ) : (
+            <div className="flex items-baseline gap-1">
+              <span className="text-4xl font-bold">
+                {formatPrice(
+                  currentPlan?.price
+                    ? subscription?.billingInterval === 'yearly'
+                      ? getYearlyPrice(currentPlan)
+                      : currentPlan.price
+                    : 0,
+                  subscription?.billingCurrency || currency,
+                )}
               </span>
-            )}
-            {currentPlan?.price === 0 && (
-              <span className="text-muted-foreground ml-2">
-                {t('payAsYouGo.badge')}
-              </span>
-            )}
-          </div>
+              {currentPlan?.price !== 0 && (
+                <span className="text-muted-foreground">
+                  /{' '}
+                  {subscription?.billingInterval === 'yearly'
+                    ? t('year')
+                    : t('month')}
+                </span>
+              )}
+              {currentPlan?.price === 0 && (
+                <span className="text-muted-foreground ml-2">
+                  {t('payAsYouGo.badge')}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Billing period */}
           {hasPaidSubscription && subscription?.currentPeriodEnd && (
@@ -608,6 +780,13 @@ export function SubscriptionManagement({
               </Button>
             )}
 
+            {billingSettingsHref && (
+              <Button variant="outline" render={<Link href={billingSettingsHref} />}>
+                <CreditCard className="mr-2 h-4 w-4" />
+                {tBilling('manage')}
+              </Button>
+            )}
+
             {hasPaidSubscription && !subscription?.cancelAtPeriodEnd && (
               <Button
                 variant="ghost"
@@ -620,9 +799,10 @@ export function SubscriptionManagement({
             )}
 
             {/* Owner-autonomous switch to pay-as-you-go — links to the tariffs
-                preview first (hidden when already scheduled or when a PAYG store
-                is here only to pick a plan). */}
+                preview first (hidden when already scheduled or when the store is
+                on pay-as-you-go already). */}
             {!showBackToPayAsYouGo &&
+              currentPlan?.price !== 0 &&
               pendingBillingMode !== 'pay_as_you_go' && (
                 <Button
                   variant="outline"
@@ -740,6 +920,12 @@ export function SubscriptionManagement({
             const selectedInterval = isYearly ? 'yearly' : 'monthly';
             const isExactCurrentPlan =
               isCurrent && currentBillingInterval === selectedInterval;
+            const action = planButtonAction({
+              isFree,
+              isAvailable,
+              isExactCurrentPlan,
+              hasLiveSubscription,
+            });
 
             // Determine button label
             const getButtonLabel = () => {
@@ -900,13 +1086,17 @@ export function SubscriptionManagement({
                           : 'outline'
                     }
                     size="lg"
-                    onClick={() => handleSubscribe(plan.slug)}
-                    disabled={
-                      loading !== null ||
-                      isFree ||
-                      !isAvailable ||
-                      isExactCurrentPlan
+                    onClick={() =>
+                      action === 'change'
+                        ? setPendingChange({
+                            plan,
+                            interval: selectedInterval,
+                            currency,
+                            price: discountedPrice,
+                          })
+                        : handleSubscribe(plan.slug)
                     }
+                    disabled={loading !== null || action === 'none'}
                   >
                     {getButtonLabel()}
                   </Button>
@@ -921,6 +1111,54 @@ export function SubscriptionManagement({
           {t('pricesExcludingTax')}
         </p>
       </div>
+
+      {/* Plan change on the live subscription: confirmed first, with the plan's price and
+          what Stripe says the change does, once it has said it. */}
+      <Dialog
+        open={pendingChange !== null}
+        onOpenChange={(open) => {
+          if (!open && loading === null) closeChangeDialog();
+        }}
+      >
+        <DialogPopup className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('changePlan')}</DialogTitle>
+          </DialogHeader>
+          <DialogPanel>
+            {pendingChange && (
+              <PlanChangeSummary
+                currentPlanName={currentPlan?.name}
+                newPlanName={pendingChange.plan.name}
+                newPlanPrice={formatPrice(pendingChange.price, pendingChange.currency)}
+                interval={pendingChange.interval}
+                preview={changePreview}
+                error={
+                  changePreview.status === 'error'
+                    ? errorText(changePreview.error)
+                    : changeError && errorText(changeError)
+                }
+              />
+            )}
+          </DialogPanel>
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button
+              onClick={handleChangePlan}
+              disabled={loading !== null || !canConfirmPlanChange(changePreview)}
+              className="w-full"
+            >
+              {loading !== null ? t('processing') : tCommon('confirm')}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={closeChangeDialog}
+              disabled={loading !== null}
+              className="w-full"
+            >
+              {tCommon('cancel')}
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
 
       {/* Cancel Subscription Modal */}
       <Dialog open={showCancelModal} onOpenChange={setShowCancelModal}>

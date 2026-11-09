@@ -53,6 +53,10 @@ const staticBreadcrumbRoutes = [
     translationKey: "settingsAdmin",
   },
   {
+    href: "/dashboard/settings/billing",
+    translationKey: "settingsBilling",
+  },
+  {
     href: "/dashboard/settings/delivery",
     translationKey: "settingsDelivery",
   },
@@ -83,6 +87,10 @@ const staticBreadcrumbRoutes = [
   {
     href: "/dashboard/settings/payments",
     translationKey: "settingsPayments",
+  },
+  {
+    href: "/dashboard/settings/customer-fields",
+    translationKey: "settingsCustomerFields",
   },
   {
     href: "/dashboard/settings/promo-codes",

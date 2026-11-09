@@ -5,11 +5,11 @@ import type {
   MarketplaceCheckoutAdapter,
   MarketplaceHoldAdapter,
 } from "@louez/api/services";
-import { db, payments } from "@louez/db";
+import { db, markReservationIds, payments } from "@louez/db";
 
 import { env } from "@/env";
+import { runReservationEffects } from "@/lib/billing/reservation-effects";
 import { cancelTulipContractForReservation } from "@/lib/integrations/tulip/contracts";
-import { voidReservationFee } from "@/lib/pay-as-you-go";
 import { createReservation } from "@/lib/reservations/create-reservation";
 import { createReservationPaymentSessionForCustomer } from "@/lib/reservations/payment-session";
 import { getCheckoutSession } from "@/lib/stripe";
@@ -109,6 +109,7 @@ export const marketplaceCheckoutAdapter: MarketplaceCheckoutAdapter = {
 };
 
 export const marketplaceCancellationAdapter: MarketplaceCancellationAdapter = {
+  runReservationEffects,
   releasePendingPayments: async ({ reservationId, stripeAccountId }) => {
     const pendingPayments = await db.query.payments.findMany({
       where: and(
@@ -131,25 +132,20 @@ export const marketplaceCancellationAdapter: MarketplaceCancellationAdapter = {
           // still cancelled below.
         }
       }
-      await db
-        .update(payments)
-        .set({ status: "cancelled", updatedAt: new Date() })
-        .where(eq(payments.id, payment.id));
+      await db.transaction(async (tx) => {
+        await tx
+          .update(payments)
+          .set({ status: "cancelled", updatedAt: new Date() })
+          .where(and(eq(payments.id, payment.id), eq(payments.reservationId, reservationId)));
+        await markReservationIds(tx, [reservationId]);
+      });
     }
   },
   runCancellationSideEffects: async (reservationId) => {
-    const logger = useLogger();
-    try {
-      await voidReservationFee(reservationId);
-    } catch (error) {
-      logger.error(
-        error instanceof Error ? error : new Error("Marketplace cancellation fee release failed"),
-      );
-    }
     try {
       await cancelTulipContractForReservation({ reservationId });
     } catch (error) {
-      logger.error(
+      useLogger().error(
         error instanceof Error
           ? error
           : new Error("Marketplace cancellation insurance release failed"),

@@ -20,10 +20,12 @@ import {
 } from "@louez/ui";
 import { cn } from "@louez/utils";
 
+import { useInstanceConfig } from "@/components/instance-provider";
+
 import {
   SETTINGS_NAVIGATION_GROUPS,
-  SETTINGS_NAVIGATION_ITEMS,
   type SettingsNavigationItem,
+  filterSettingsNavigationItems,
 } from "./settings-navigation.constants";
 import { buildSettingsSearchHref } from "./util.settings-search-focus";
 import {
@@ -49,6 +51,10 @@ type SettingsSearchGroup = {
 
 type SettingsNavProps = {
   isPlatformAdmin?: boolean;
+  /** Louez's own billing bills this store now: its referral rewards are listed. */
+  legacyBillingEnabled?: boolean;
+  /** The viewer may see the billing pages of this store ("Facturation"). */
+  billingPagesEnabled?: boolean;
   electronicInvoicingEnabled?: boolean;
   /** The settings page on screen, where it is not the one in the address bar: a demo scene. */
   pathname?: string;
@@ -58,6 +64,8 @@ type SettingsNavProps = {
 
 export const SettingsNav = ({
   isPlatformAdmin = false,
+  legacyBillingEnabled = false,
+  billingPagesEnabled = false,
   electronicInvoicingEnabled = true,
   pathname: suppliedPathname,
   onNavigate,
@@ -70,14 +78,23 @@ export const SettingsNav = ({
   const messages = useMessages();
   const t = useTranslations("dashboard.settings.settingsNavigation");
 
+  const { billingEnabled } = useInstanceConfig();
   const availableItems = useMemo(
     () =>
-      SETTINGS_NAVIGATION_ITEMS.filter(
-        (item) =>
-          (!item.platformAdminOnly || isPlatformAdmin) &&
-          (!item.requiresElectronicInvoicing || electronicInvoicingEnabled),
-      ),
-    [isPlatformAdmin, electronicInvoicingEnabled],
+      filterSettingsNavigationItems({
+        billingEnabled,
+        legacyBillingEnabled,
+        billingPagesEnabled,
+        electronicInvoicingEnabled,
+        isPlatformAdmin,
+      }),
+    [
+      billingEnabled,
+      legacyBillingEnabled,
+      billingPagesEnabled,
+      isPlatformAdmin,
+      electronicInvoicingEnabled,
+    ],
   );
 
   const navigationGroups = useMemo(

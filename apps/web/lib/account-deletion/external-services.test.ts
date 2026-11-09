@@ -131,10 +131,51 @@ test("does not partially delete connected accounts when a later Standard live ac
   assert.deepEqual(deletedAccountIds, []);
 });
 
-test("blocks cleanup when a known Google calendar cannot be deleted", async () => {
+test("leaves a Google calendar Louez can no longer reach to its owner and goes on", async () => {
   const { cleanupGoogleConnections } = await import("./external-services");
   let calendarDeletionCalled = false;
+  const leftBehind: string[] = [];
   const revokedTokens: string[] = [];
+
+  await cleanupGoogleConnections(
+    {
+      googleAuthTokens: ["google-auth-token"],
+      googleCalendarConnections: [
+        {
+          calendarId: "calendar-1",
+          accessTokenEncrypted: "encrypted-expired-access",
+          refreshTokenEncrypted: "encrypted-revoked-refresh",
+          accessTokenExpiresAt: new Date("2026-01-01T00:00:00.000Z"),
+        },
+      ],
+    },
+    {
+      decryptSecret: (value: string) => value.replace("encrypted-", ""),
+      deleteCalendar: async () => {
+        calendarDeletionCalled = true;
+      },
+      isCredentialUnavailableError: () => true,
+      now: () => new Date("2026-08-28T00:00:00.000Z").getTime(),
+      refreshAccessToken: async () => {
+        throw new Error("refresh token revoked");
+      },
+      reportCalendarLeftBehind: (calendarId: string) => {
+        leftBehind.push(calendarId);
+      },
+      revokeToken: async (token: string) => {
+        revokedTokens.push(token);
+      },
+    },
+  );
+
+  assert.equal(calendarDeletionCalled, false);
+  assert.deepEqual(leftBehind, ["calendar-1"]);
+  assert.deepEqual(revokedTokens, ["revoked-refresh", "expired-access", "google-auth-token"]);
+});
+
+test("still stops on a Google error that is not a lost credential", async () => {
+  const { cleanupGoogleConnections } = await import("./external-services");
+  const leftBehind: string[] = [];
 
   await assert.rejects(
     cleanupGoogleConnections(
@@ -144,31 +185,29 @@ test("blocks cleanup when a known Google calendar cannot be deleted", async () =
           {
             calendarId: "calendar-1",
             accessTokenEncrypted: "encrypted-expired-access",
-            refreshTokenEncrypted: "encrypted-revoked-refresh",
+            refreshTokenEncrypted: "encrypted-refresh",
             accessTokenExpiresAt: new Date("2026-01-01T00:00:00.000Z"),
           },
         ],
       },
       {
         decryptSecret: (value: string) => value.replace("encrypted-", ""),
-        deleteCalendar: async () => {
-          calendarDeletionCalled = true;
-        },
-        isCredentialUnavailableError: () => true,
+        deleteCalendar: async () => {},
+        isCredentialUnavailableError: () => false,
         now: () => new Date("2026-08-28T00:00:00.000Z").getTime(),
         refreshAccessToken: async () => {
-          throw new Error("refresh token revoked");
+          throw new Error("Google is unavailable");
         },
-        revokeToken: async (token: string) => {
-          revokedTokens.push(token);
+        reportCalendarLeftBehind: (calendarId: string) => {
+          leftBehind.push(calendarId);
         },
+        revokeToken: async () => {},
       },
     ),
-    /Known Google Calendar could not be deleted/,
+    /Google is unavailable/,
   );
 
-  assert.equal(calendarDeletionCalled, false);
-  assert.deepEqual(revokedTokens, []);
+  assert.deepEqual(leftBehind, []);
 });
 
 test("deletes a known Google calendar before revoking retry-safe tokens", async () => {
@@ -197,6 +236,9 @@ test("deletes a known Google calendar before revoking retry-safe tokens", async 
       refreshAccessToken: async () => {
         throw new Error("refresh should not be needed");
       },
+      reportCalendarLeftBehind: () => {
+        throw new Error("the calendar is reachable");
+      },
       // The real adapter treats Google's already-revoked response as success;
       // this seam verifies that retries still reach every revocation.
       revokeToken: async (token: string) => {
@@ -211,4 +253,46 @@ test("deletes a known Google calendar before revoking retry-safe tokens", async 
     "revoke:access-token",
     "revoke:google-auth-token",
   ]);
+});
+
+test("leaves platform customers to the billing service, never their subscription", async () => {
+  // Louez Cloud with the billing service owns no platform customer (design §8.6): the
+  // service bills the final statement, then closes the customer. Pro/Ultra
+  // subscriptions stay Louez's until Q10 (design §1), so Louez still cancels them, or
+  // Stripe would keep charging the deleted owner. Connect accounts stay Louez's to
+  // remove. A self-hosted instance removes all three, as before.
+  const { selectStripeObjectsToRemove } = await import("./external-services");
+  const resources = {
+    stripeAccountIds: ["acct_store"],
+    stripeCustomerIds: ["cus_platform"],
+    stripeSubscriptionIds: ["sub_pro"],
+  };
+
+  assert.deepEqual(selectStripeObjectsToRemove(resources, true), {
+    stripeAccountIds: ["acct_store"],
+    stripeCustomerIds: [],
+    stripeSubscriptionIds: ["sub_pro"],
+  });
+  assert.deepEqual(selectStripeObjectsToRemove(resources, false), resources);
+
+  const saved = { billing: process.env.LOUEZ_BILLING, url: process.env.BILLING_SERVICE_URL };
+  try {
+    process.env.LOUEZ_BILLING = "cloud";
+    process.env.BILLING_SERVICE_URL = "https://billing.example.test";
+    assert.deepEqual(selectStripeObjectsToRemove(resources), {
+      ...resources,
+      stripeCustomerIds: [],
+    });
+    // Billing on but no service yet: nobody else would ever close the customer.
+    delete process.env.BILLING_SERVICE_URL;
+    assert.deepEqual(selectStripeObjectsToRemove(resources), resources);
+    process.env.LOUEZ_BILLING = "off";
+    process.env.BILLING_SERVICE_URL = "https://billing.example.test";
+    assert.deepEqual(selectStripeObjectsToRemove(resources), resources);
+  } finally {
+    if (saved.billing === undefined) delete process.env.LOUEZ_BILLING;
+    else process.env.LOUEZ_BILLING = saved.billing;
+    if (saved.url === undefined) delete process.env.BILLING_SERVICE_URL;
+    else process.env.BILLING_SERVICE_URL = saved.url;
+  }
 });

@@ -1,19 +1,23 @@
 "use server";
 
+import { headers } from "next/headers";
 import { getLocale } from "next-intl/server";
 
 import { and, eq, gt } from "drizzle-orm";
 import { z } from "zod";
 
+import { acceptReservationContract } from "@louez/api/services";
 import { db, paymentRequests, reservations } from "@louez/db";
 import { validateStripePaymentAmount } from "@louez/utils";
 
+import { reservationTotalsMinor } from "@/lib/billing-sync/money";
 import { log } from "@/lib/evlog";
-import { buildFeeMetadata, getStoreBilling, planStripeFees } from "@/lib/pay-as-you-go";
+import { buildFeeMetadata, planApplicationFee } from "@/lib/pay-as-you-go";
 import { createReservationInstantAccessUrl } from "@/lib/customer-auth/instant-access";
 import { getStoreBySlug } from "@/lib/storefront/get-store-by-slug";
 import { getStorefrontUrl } from "@/lib/storefront-url";
 import { createPaymentRequestSession, toStripeCents } from "@/lib/stripe";
+import { paymentInsuranceShareMinor } from "@/lib/stripe/payment-completion";
 
 export type PaymentRequestError =
   | "store_not_found"
@@ -31,12 +35,14 @@ export type PaymentRequestData =
       reservation: { id: string; number: string };
       paymentRequest: { id: string; amount: number; currency: string; description: string };
       customer: { firstName: string };
+      /** The customer has not accepted the rental terms yet: they do it before paying. */
+      requiresContractAcceptance: boolean;
     }
   | { ok: false; error: PaymentRequestError };
 
 export type InitiatePaymentResult =
   | { ok: true; url: string }
-  | { ok: false; error: PaymentRequestError }
+  | { ok: false; error: PaymentRequestError | "contract_not_accepted" }
   | { ok: false; error: "amount_too_small"; minimumAmount: number; currency: string };
 
 // The Stripe session lives 30 minutes; the token that logs the customer in on
@@ -53,7 +59,14 @@ const accessInputSchema = z.object({
 const initiateInputSchema = accessInputSchema.extend({
   token: z.string().trim().min(1).max(128),
   paymentRequestId: z.string().trim().min(1).max(64),
+  acceptContract: z.boolean().default(false),
 });
+
+/** Paying for the rental is when a customer who has not signed yet accepts the rental terms. */
+const requiresContractAcceptance = (
+  reservation: { signedAt: Date | null },
+  paymentRequest: { type: "rental" | "custom" },
+): boolean => reservation.signedAt === null && paymentRequest.type === "rental";
 
 const describeError = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -92,7 +105,11 @@ const loadPaymentRequestContext = async ({
 
   const reservation = await db.query.reservations.findFirst({
     where: and(eq(reservations.id, reservationId), eq(reservations.storeId, store.id)),
-    with: { customer: true },
+    with: {
+      customer: true,
+      // The insurance share of a rental payment reads the reservation's totals.
+      items: { columns: { productId: true, taxRate: true, totalPrice: true } },
+    },
   });
   if (!reservation) {
     return { ok: false as const, error: "reservation_not_found" as const };
@@ -137,6 +154,7 @@ export const getPaymentRequestData = async (
       description: paymentRequest.description,
     },
     customer: { firstName: reservation.customer.firstName },
+    requiresContractAcceptance: requiresContractAcceptance(reservation, paymentRequest),
   };
 };
 
@@ -157,6 +175,19 @@ export const initiatePayment = async (
   const { store, reservation, paymentRequest } = context;
   if (paymentRequest.id !== parsed.data.paymentRequestId || paymentRequest.status !== "pending") {
     return { ok: false, error: "invalid_token" };
+  }
+  // The customer signs by accepting the rental terms here, with the date and their IP
+  // address, before paying. The contract picks the signature up when it is next generated.
+  if (requiresContractAcceptance(reservation, paymentRequest)) {
+    if (!parsed.data.acceptContract) {
+      return { ok: false, error: "contract_not_accepted" };
+    }
+    await acceptReservationContract({
+      reservationId: reservation.id,
+      storeId: store.id,
+      headers: await headers(),
+      method: "payment_page",
+    });
   }
 
   const currency = paymentRequest.currency;
@@ -184,17 +215,25 @@ export const initiatePayment = async (
       getLocale(),
     ]);
 
-    // Platform fees apply to rental payments only, never to custom charges
-    // (damage fees); the exact breakdown is recorded by the webhook.
-    const feePlan =
-      paymentRequest.type === "rental"
-        ? await planStripeFees({
-            storeId: store.id,
-            reservationId: reservation.id,
-            chargeCents,
-            billing: await getStoreBilling(store.id),
-          })
-        : null;
+    const paymentKind = paymentRequest.type === "rental" ? "rental" : "custom_request";
+    const insuranceShareMinor = paymentInsuranceShareMinor(paymentKind, chargeCents, () =>
+      reservationTotalsMinor({
+        reservation,
+        storeSettings: store.settings,
+        items: reservation.items,
+      }),
+    );
+    // The legacy planner takes no fee on a custom charge (damage fees); a store the
+    // billing service bills pays what its policy says of the kind. The payment
+    // copies the fee from the metadata when it completes.
+    const feePlan = await planApplicationFee({
+      storeId: store.id,
+      reservationId: reservation.id,
+      kind: paymentKind,
+      chargeMinor: chargeCents,
+      currency,
+      insuranceShareMinor: insuranceShareMinor ?? 0,
+    });
 
     const session = await createPaymentRequestSession({
       stripeAccountId: store.stripeAccountId,
@@ -211,8 +250,13 @@ export const initiatePayment = async (
         `/pay/${reservation.id}?token=${encodeURIComponent(parsed.data.token)}`,
       ),
       paymentRequestId: paymentRequest.id,
-      applicationFeeAmount: feePlan?.applicationFeeCents,
-      feeMetadata: feePlan ? buildFeeMetadata(feePlan) : undefined,
+      applicationFeeAmount: feePlan.applicationFeeCents,
+      feeMetadata: buildFeeMetadata(feePlan, {
+        insuranceShareMinor: insuranceShareMinor ?? 0,
+        paymentKind,
+        reservationId: reservation.id,
+        storeId: store.id,
+      }),
       locale,
     });
 
