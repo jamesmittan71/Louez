@@ -8434,6 +8434,7 @@
     "minRentalDurationViolation": "The rental duration must be at least {duration}",
     "maxRentalDurationViolation": "The rental duration cannot exceed {duration}",
     "deliveryNotEnabled": "Delivery is not enabled for this store",
+    "deliveryAndDistanceConflict": "A delivery fee cannot be combined with a distance charge.",
     "deliveryMinimumOrderAmountNotMet": "Delivery is available from {amount} of rental",
     "deliveryAddressRequired": "Please enter a valid delivery address",
     "storeCoordinatesNotConfigured": "Store coordinates are not configured",

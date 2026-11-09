@@ -8434,6 +8434,7 @@
     "minRentalDurationViolation": "Die Mietdauer muss mindestens {duration} betragen",
     "maxRentalDurationViolation": "Die Mietdauer darf {duration} nicht überschreiten",
     "deliveryNotEnabled": "Lieferung ist für diesen Shop nicht aktiviert",
+    "deliveryAndDistanceConflict": "Liefergebühren können nicht mit einer Entfernungsgebühr kombiniert werden.",
     "deliveryMinimumOrderAmountNotMet": "Die Lieferung ist ab einem Mietbetrag von {amount} verfügbar",
     "deliveryAddressRequired": "Bitte geben Sie eine gültige Lieferadresse ein",
     "storeCoordinatesNotConfigured": "Shop-Koordinaten sind nicht konfiguriert",
