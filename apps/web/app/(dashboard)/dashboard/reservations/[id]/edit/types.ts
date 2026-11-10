@@ -5,6 +5,7 @@ import type {
   PricingBreakdown,
   PricingKind,
   PricingMode,
+  ProductTaxSettings,
   ReservationLocationSnapshot,
   ProductSnapshot,
   StoreSettings,
@@ -37,6 +38,7 @@ export interface Product {
   enforceStrictTiers?: boolean;
   pricingTiers: PricingTier[];
   seasonalPricings?: SeasonalPricingConfig[];
+  taxSettings?: ProductTaxSettings | null;
 }
 
 export interface ReservationItem {
@@ -120,6 +122,8 @@ export interface EditableItem {
   depositPerUnit: number;
   isManualPrice: boolean;
   pricingMode: PricingMode;
+  chargeKind?: "duration" | "once" | "distance";
+  billedQuantity?: number;
   basePeriodMinutes?: number | null;
   enforceStrictTiers?: boolean;
   productSnapshot: ProductSnapshot;

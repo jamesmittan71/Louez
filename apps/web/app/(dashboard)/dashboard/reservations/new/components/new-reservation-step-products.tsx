@@ -185,9 +185,7 @@ export function NewReservationStepProducts({
 
       map.set(
         product.id,
-        productCapacity === null
-          ? null
-          : Math.max(0, productCapacity - selectedQuantity),
+        productCapacity === null ? null : Math.max(0, productCapacity - selectedQuantity),
       );
     }
 
@@ -376,9 +374,7 @@ export function NewReservationStepProducts({
                     Math.max(0, product.quantity - productReservedQuantity));
               const isOutOfStock = productCapacity === 0;
               const remainingStock =
-                productCapacity === null
-                  ? null
-                  : Math.max(0, productCapacity - selectedQuantity);
+                productCapacity === null ? null : Math.max(0, productCapacity - selectedQuantity);
               const selectableQuantity = getSelectableQuantity(product);
               const remainingSelectableQuantity =
                 selectableQuantity === null
@@ -562,10 +558,7 @@ export function NewReservationStepProducts({
                           type="button"
                           variant={isOutOfStock ? "ghost" : "outline"}
                           onClick={() => addProduct(product.id)}
-                          disabled={
-                            selectableQuantity !== null &&
-                            selectableQuantity <= 0
-                          }
+                          disabled={selectableQuantity !== null && selectableQuantity <= 0}
                           className="w-full sm:w-auto"
                         >
                           <Plus className="mr-1 h-4 w-4" />
@@ -577,8 +570,7 @@ export function NewReservationStepProducts({
                           variant="outline"
                           onClick={() => addProduct(product.id)}
                           disabled={
-                            remainingSelectableQuantity !== null &&
-                            remainingSelectableQuantity <= 0
+                            remainingSelectableQuantity !== null && remainingSelectableQuantity <= 0
                           }
                           className="w-full sm:w-auto"
                         >
@@ -594,8 +586,7 @@ export function NewReservationStepProducts({
                       {lineStates.map(({ line, pricing, constraints }, index) => {
                         const lineMaxQuantity = constraints.lineMaxQuantity;
                         const canIncreaseLine =
-                          lineMaxQuantity === null ||
-                          line.quantity < lineMaxQuantity;
+                          lineMaxQuantity === null || line.quantity < lineMaxQuantity;
                         const lineReachedMax =
                           lineMaxQuantity !== null &&
                           lineMaxQuantity > 0 &&
@@ -871,12 +862,17 @@ export function NewReservationStepProducts({
                           </Badge>
                         </div>
                         <p className="text-muted-foreground mt-0.5 text-sm">
-                          {formatCurrency(item.unitPrice)}/
-                          {item.pricingMode === "hour"
-                            ? t("perHour")
-                            : item.pricingMode === "week"
-                              ? "week"
-                              : t("perDay")}
+                          {item.chargeKind === "distance"
+                            ? `${formatCurrency(item.unitPrice)} / km`
+                            : item.chargeKind === "once"
+                              ? t("customItem.chargeKindOnce")
+                              : `${formatCurrency(item.unitPrice)}/${
+                                  item.pricingMode === "hour"
+                                    ? t("perHour")
+                                    : item.pricingMode === "week"
+                                      ? "week"
+                                      : t("perDay")
+                                }`}
                         </p>
                         {item.description && (
                           <p className="text-muted-foreground mt-1 line-clamp-2 text-xs">
@@ -894,7 +890,9 @@ export function NewReservationStepProducts({
                         >
                           <Minus className="h-3 w-3" />
                         </Button>
-                        <span className="w-8 text-center font-medium">{item.quantity}</span>
+                        <span className="w-8 text-center font-medium">
+                          {item.chargeKind === "distance" ? item.billedQuantity : item.quantity}
+                        </span>
                         <Button
                           type="button"
                           variant="outline"
@@ -915,16 +913,26 @@ export function NewReservationStepProducts({
                         </Button>
                       </div>
                     </div>
-                    {startDate && endDate && (
+                    {(item.chargeKind === "once" ||
+                      item.chargeKind === "distance" ||
+                      (startDate && endDate)) && (
                       <div className="border-border mt-3 flex items-center justify-between border-t pt-3 text-sm">
                         <span className="text-muted-foreground">
-                          {item.quantity} ×{" "}
-                          {calculateDurationForMode(startDate, endDate, item.pricingMode)}{" "}
-                          {item.pricingMode === "hour"
-                            ? "h"
-                            : item.pricingMode === "week"
-                              ? "sem"
-                              : "j"}
+                          {item.chargeKind === "distance"
+                            ? `${item.billedQuantity ?? 0} km`
+                            : item.chargeKind === "once"
+                              ? t("customItem.chargeKindOnce")
+                              : `${item.quantity} × ${
+                                  startDate && endDate
+                                    ? calculateDurationForMode(startDate, endDate, item.pricingMode)
+                                    : 0
+                                } ${
+                                  item.pricingMode === "hour"
+                                    ? "h"
+                                    : item.pricingMode === "week"
+                                      ? "sem"
+                                      : "j"
+                                }`}
                         </span>
                         <span className="font-medium">
                           {formatCurrency(getCustomItemTotal(item))}

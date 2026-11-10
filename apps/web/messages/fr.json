@@ -2346,6 +2346,8 @@
         "insuranceLine": "Garantie casse/vol",
         "insuranceEstimating": "Calcul...",
         "difference": "Différence",
+        "vat": "TVA",
+        "vatIncluded": "TVA incluse",
         "deposit": "Caution",
         "save": "Enregistrer",
         "saved": "Réservation mise à jour",
@@ -2463,6 +2465,8 @@
         "subtotal": "Sous-total",
         "deposit": "Caution",
         "total": "Total",
+        "vat": "TVA",
+        "vatIncluded": "TVA incluse",
         "tulipInsurance": {
           "title": "Assurance Tulip",
           "appliesMappedProducts": "S'applique uniquement aux produits mappés vers Tulip.",
@@ -2577,7 +2581,14 @@
           "addButton": "Ajouter",
           "nameRequired": "Veuillez saisir un nom pour l'article",
           "priceRequired": "Veuillez saisir un prix valide",
-          "added": "Article personnalisé ajouté"
+          "added": "Article personnalisé ajouté",
+          "chargeKind": "Facturation de la ligne",
+          "chargeKindDuration": "Tarif de location sur la période",
+          "chargeKindOnce": "Frais unique",
+          "chargeKindDistance": "Transport au kilomètre",
+          "chargeKindOnceHint": "Facturé une seule fois pour ce travail. La durée de location ne le répète pas.",
+          "chargeKindDistanceHint": "Kilomètres multipliés par le tarif saisi. Ce n'est pas du stock et la durée de location ne le multiplie pas.",
+          "kilometres": "Kilomètres"
         },
         "priceOverride": {
           "dialogTitle": "Modifier le prix",
@@ -8423,6 +8434,7 @@
     "minRentalDurationViolation": "La durée de location doit être d'au moins {duration}",
     "maxRentalDurationViolation": "La durée de location ne peut pas dépasser {duration}",
     "deliveryNotEnabled": "La livraison n'est pas activée pour cette boutique",
+    "deliveryAndDistanceConflict": "Les frais de livraison ne peuvent pas être cumulés avec des frais au kilomètre.",
     "deliveryMinimumOrderAmountNotMet": "La livraison est disponible à partir de {amount} de location",
     "deliveryAddressRequired": "Veuillez saisir une adresse de livraison valide",
     "storeCoordinatesNotConfigured": "Les coordonnées de la boutique ne sont pas configurées",

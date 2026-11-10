@@ -2390,7 +2390,9 @@
           "tooFar": "La dirección supera la distancia máxima ({maxDistance} km)",
           "savings": "Ahorro",
           "deliveryFee": "Gastos de envío"
-        }
+        },
+        "vat": "VAT",
+        "vatIncluded": "VAT included"
       },
       "contract": {
         "title": "Contrato",
@@ -2568,7 +2570,14 @@
           "addButton": "Agregar",
           "nameRequired": "Por favor ingrese un nombre para el articulo",
           "priceRequired": "Por favor ingrese un precio valido",
-          "added": "Articulo personalizado agregado"
+          "added": "Articulo personalizado agregado",
+          "chargeKind": "How this line is billed",
+          "chargeKindDuration": "Hire rate for the reservation period",
+          "chargeKindOnce": "One-off fee",
+          "chargeKindDistance": "Distance charge",
+          "chargeKindOnceHint": "Charged once for this job. The hire length does not repeat it.",
+          "chargeKindDistanceHint": "Kilometres times the rate you enter. This is not stock and the hire length does not multiply it.",
+          "kilometres": "Kilometres"
         },
         "priceOverride": {
           "dialogTitle": "Modificar precio",
@@ -2625,7 +2634,9 @@
           "label": "Descuento",
           "add": "Añadir un descuento",
           "remove": "Quitar el descuento"
-        }
+        },
+        "vat": "VAT",
+        "vatIncluded": "VAT included"
       },
       "rejectDialog": {
         "title": "Rechazar solicitud",
@@ -8423,6 +8434,7 @@
     "minRentalDurationViolation": "La duración del alquiler debe ser de al menos {duration}",
     "maxRentalDurationViolation": "La duración del alquiler no puede superar las {duration}",
     "deliveryNotEnabled": "La entrega no está habilitada para esta tienda",
+    "deliveryAndDistanceConflict": "La tarifa de entrega no se puede combinar con un cargo por distancia.",
     "deliveryMinimumOrderAmountNotMet": "La entrega está disponible a partir de {amount} de alquiler",
     "deliveryAddressRequired": "Por favor, introduzca una dirección de entrega válida",
     "storeCoordinatesNotConfigured": "Las coordenadas de la tienda no están configuradas",

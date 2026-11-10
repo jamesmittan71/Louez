@@ -1,29 +1,19 @@
-import { redirect } from 'next/navigation';
+import { redirect } from "next/navigation";
 
-import { subDays } from 'date-fns';
-import { and, eq, exists, gte, inArray, or } from 'drizzle-orm';
-import { getTranslations } from 'next-intl/server';
+import { subDays } from "date-fns";
+import { and, eq, exists, gte, inArray, or } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 
-import {
-  db,
-  getBlockingReservationStatuses,
-  getEffectiveProductQuantities,
-} from '@louez/db';
-import {
-  customers,
-  products,
-  reservationItems,
-  reservations,
-  storeLocations,
-} from '@louez/db';
+import { db, getBlockingReservationStatuses, getEffectiveProductQuantities } from "@louez/db";
+import { customers, products, reservationItems, reservations, storeLocations } from "@louez/db";
 
-import { getDashboardTulipInsuranceModeFromSettings } from '@/lib/integrations/tulip/settings';
-import { resolveTulipIntegrationForStore } from '@/lib/integrations/tulip/state';
-import { resolveDashboardCreationSource } from '@/lib/openreplay/events';
-import { getCurrentStore } from '@/lib/store-context';
-import { getCurrentDowntimeUnitIds } from '@/lib/utils/unit-current-downtime';
+import { getDashboardTulipInsuranceModeFromSettings } from "@/lib/integrations/tulip/settings";
+import { resolveTulipIntegrationForStore } from "@/lib/integrations/tulip/state";
+import { resolveDashboardCreationSource } from "@/lib/openreplay/events";
+import { getCurrentStore } from "@/lib/store-context";
+import { getCurrentDowntimeUnitIds } from "@/lib/utils/unit-current-downtime";
 
-import { NewReservationFormBoundary } from './new-reservation-form-boundary';
+import { NewReservationFormBoundary } from "./new-reservation-form-boundary";
 
 // TODO: Cache Components adoption. Refactor this route so this opt-out can be removed.
 // See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
@@ -39,13 +29,10 @@ async function getCustomers(storeId: string) {
 async function getProductsWithTiers(storeId: string) {
   // Fetch products with their pricing tiers and seasonal pricings
   const result = await db.query.products.findMany({
-    where: and(eq(products.storeId, storeId), eq(products.status, 'active')),
+    where: and(eq(products.storeId, storeId), eq(products.status, "active")),
     // Storefront catalog order, with a predictable alphabetical fallback
     // for stores that never configured displayOrder
-    orderBy: (products, { asc }) => [
-      asc(products.displayOrder),
-      asc(products.name),
-    ],
+    orderBy: (products, { asc }) => [asc(products.displayOrder), asc(products.name)],
     with: {
       pricingTiers: true,
       seasonalPricings: {
@@ -78,9 +65,7 @@ async function getProductsWithTiers(storeId: string) {
   return result
     .map((p) => ({
       ...p,
-      quantity: p.trackUnits
-        ? effectiveQuantities.get(p.id) ?? 0
-        : p.quantity,
+      quantity: p.trackUnits ? (effectiveQuantities.get(p.id) ?? 0) : p.quantity,
       tulipInsurable: Boolean(p.tulipMapping?.productId),
       units: p.units.map((unit) => ({
         lifecycleStatus: unit.lifecycleStatus,
@@ -111,21 +96,16 @@ async function getProductsWithTiers(storeId: string) {
           })),
       })),
     }))
-    .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    .sort((a, b) => a.name.localeCompare(b.name, "fr"));
 }
 
 // Fetch existing reservations for availability conflict checking
-async function getActiveReservations(
-  storeId: string,
-  pendingBlocksAvailability: boolean,
-) {
+async function getActiveReservations(storeId: string, pendingBlocksAvailability: boolean) {
   // Get reservations that are active or upcoming (not cancelled/rejected/completed)
   // Only look at reservations from 30 days ago to avoid loading too much data
   const thirtyDaysAgo = subDays(new Date(), 30);
 
-  const blockingStatuses = getBlockingReservationStatuses(
-    pendingBlocksAvailability,
-  );
+  const blockingStatuses = getBlockingReservationStatuses(pendingBlocksAvailability);
 
   const activeReservations = await db.query.reservations.findMany({
     where: and(
@@ -142,7 +122,7 @@ async function getActiveReservations(
               and(
                 eq(reservationItems.reservationId, reservations.id),
                 eq(products.storeId, storeId),
-                eq(products.stockKind, 'consumable'),
+                eq(products.stockKind, "consumable"),
               ),
             ),
         ),
@@ -178,7 +158,7 @@ async function getActiveReservations(
       quantity: item.quantity,
       consumedQuantity: item.consumedQuantity,
       combinationKey: item.combinationKey,
-      stockKind: item.product?.stockKind ?? 'returnable',
+      stockKind: item.product?.stockKind ?? "returnable",
     })),
   }));
 }
@@ -187,53 +167,38 @@ interface NewReservationPageProps {
   searchParams: Promise<{ source?: string | string[] }>;
 }
 
-export default async function NewReservationPage({
-  searchParams,
-}: NewReservationPageProps) {
-  const t = await getTranslations('dashboard.reservations');
+export default async function NewReservationPage({ searchParams }: NewReservationPageProps) {
+  const t = await getTranslations("dashboard.reservations");
   const store = await getCurrentStore();
   const { source } = await searchParams;
   const openReplaySource = resolveDashboardCreationSource(source);
 
   if (!store) {
-    redirect('/onboarding');
+    redirect("/onboarding");
   }
 
   const deliverySettings = store.settings?.delivery;
-  const [
-    customersList,
-    productsList,
-    activeReservations,
-    activeStoreLocations,
-  ] = await Promise.all([
-    getCustomers(store.id),
-    getProductsWithTiers(store.id),
-    getActiveReservations(
-      store.id,
-      store.settings?.pendingBlocksAvailability ?? true,
-    ),
-    deliverySettings?.multiLocationEnabled
-      ? db.query.storeLocations.findMany({
-          where: and(
-            eq(storeLocations.storeId, store.id),
-            eq(storeLocations.isActive, true),
-          ),
-          orderBy: (storeLocations, { asc }) => [asc(storeLocations.createdAt)],
-        })
-      : Promise.resolve([]),
-  ]);
-  const tulipSettings = (await resolveTulipIntegrationForStore(store.id))
-    .settings;
-  const tulipInsuranceMode =
-    getDashboardTulipInsuranceModeFromSettings(tulipSettings);
+  const [customersList, productsList, activeReservations, activeStoreLocations] = await Promise.all(
+    [
+      getCustomers(store.id),
+      getProductsWithTiers(store.id),
+      getActiveReservations(store.id, store.settings?.pendingBlocksAvailability ?? true),
+      deliverySettings?.multiLocationEnabled
+        ? db.query.storeLocations.findMany({
+            where: and(eq(storeLocations.storeId, store.id), eq(storeLocations.isActive, true)),
+            orderBy: (storeLocations, { asc }) => [asc(storeLocations.createdAt)],
+          })
+        : Promise.resolve([]),
+    ],
+  );
+  const tulipSettings = (await resolveTulipIntegrationForStore(store.id)).settings;
+  const tulipInsuranceMode = getDashboardTulipInsuranceModeFromSettings(tulipSettings);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          {t('addReservation')}
-        </h1>
-        <p className="text-muted-foreground">{t('createManually')}</p>
+        <h1 className="text-2xl font-bold tracking-tight">{t("addReservation")}</h1>
+        <p className="text-muted-foreground">{t("createManually")}</p>
       </div>
 
       <NewReservationFormBoundary
@@ -243,15 +208,14 @@ export default async function NewReservationPage({
         tulipInsuranceMode={tulipInsuranceMode}
         businessHours={store.settings?.businessHours}
         advanceNoticeMinutes={store.settings?.advanceNoticeMinutes || 0}
-        pendingBlocksAvailability={
-          (store.settings?.pendingBlocksAvailability) ?? true
-        }
+        pendingBlocksAvailability={store.settings?.pendingBlocksAvailability ?? true}
         turnoverBufferMinutes={store.settings?.turnoverBufferMinutes ?? 0}
         existingReservations={activeReservations}
         deliverySettings={deliverySettings}
         storeLatitude={store.latitude ? parseFloat(store.latitude) : null}
         storeLongitude={store.longitude ? parseFloat(store.longitude) : null}
         storeAddress={store.address}
+        taxSettings={store.settings?.tax}
         storeLocations={[
           {
             id: null,
@@ -259,7 +223,7 @@ export default async function NewReservationPage({
             address: store.address ?? null,
             city: null,
             postalCode: null,
-            country: store.settings?.country ?? 'FR',
+            country: store.settings?.country ?? "FR",
           },
           ...activeStoreLocations.map((location) => ({
             id: location.id,

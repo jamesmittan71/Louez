@@ -66,7 +66,10 @@ export function EditReservationItemCard({
   const [open, setOpen] = useState(() => Boolean(warning));
 
   const unitLabel = getDurationUnit(item.displayPricingMode);
-  const isFixedPrice = item.product?.pricingKind === "fixed";
+  const isDistance = !item.productId && item.chargeKind === "distance";
+  const isOnce = !item.productId && item.chargeKind === "once";
+  const isFixedPrice = item.product?.pricingKind === "fixed" || isOnce;
+  const quantityValue = isDistance ? (item.billedQuantity ?? 0) : item.quantity;
   const displayedUnitPrice = item.isManualPrice ? item.unitPrice : item.effectiveUnitPrice;
   // A reservation keeps at least one item. The button stays focusable so the
   // tooltip and the click toast can explain why it does nothing.
@@ -185,14 +188,20 @@ export function EditReservationItemCard({
               )
             )}
             <span>
-              {isFixedPrice ? (
+              {isDistance ? (
+                <>
+                  {quantityValue} km × {displayedUnitPrice.toFixed(2)}
+                  {currencySymbol}
+                </>
+              ) : isFixedPrice ? (
                 <>
                   {item.quantity} × {displayedUnitPrice.toFixed(2)}
                   {currencySymbol} · {tProductForm("fixedPriceLabel")}
                 </>
               ) : (
                 <>
-                  {item.quantity} × {item.displayDuration} {unitLabel} · {displayedUnitPrice.toFixed(2)}
+                  {item.quantity} × {item.displayDuration} {unitLabel} ·{" "}
+                  {displayedUnitPrice.toFixed(2)}
                   {currencySymbol}/{unitLabel}
                 </>
               )}
@@ -210,12 +219,13 @@ export function EditReservationItemCard({
           <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
             <div className="space-y-1">
               <p className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
-                {t("edit.qty")}
+                {isDistance ? tForm("customItem.kilometres") : t("edit.qty")}
               </p>
               <InputQuantity
-                value={item.quantity}
+                value={quantityValue}
+                min={isDistance ? 0.001 : 1}
                 onChange={(quantity) => onQuantityChange(item.id, quantity)}
-                ariaLabel={`${t("edit.qty")}, ${item.productSnapshot.name}`}
+                ariaLabel={`${isDistance ? tForm("customItem.kilometres") : t("edit.qty")}, ${item.productSnapshot.name}`}
               />
             </div>
 

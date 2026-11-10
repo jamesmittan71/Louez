@@ -2390,7 +2390,9 @@
           "tooFar": "地址超出最大距离（{maxDistance} 公里）",
           "savings": "储蓄",
           "deliveryFee": "送货费"
-        }
+        },
+        "vat": "VAT",
+        "vatIncluded": "VAT included"
       },
       "contract": {
         "title": "合同",
@@ -2568,7 +2570,14 @@
           "addButton": "添加",
           "nameRequired": "请输入商品名称",
           "priceRequired": "请输入有效价格",
-          "added": "添加了自定义项目"
+          "added": "添加了自定义项目",
+          "chargeKind": "How this line is billed",
+          "chargeKindDuration": "Hire rate for the reservation period",
+          "chargeKindOnce": "One-off fee",
+          "chargeKindDistance": "Distance charge",
+          "chargeKindOnceHint": "Charged once for this job. The hire length does not repeat it.",
+          "chargeKindDistanceHint": "Kilometres times the rate you enter. This is not stock and the hire length does not multiply it.",
+          "kilometres": "Kilometres"
         },
         "priceOverride": {
           "dialogTitle": "编辑价格",
@@ -2625,7 +2634,9 @@
           "label": "折扣",
           "add": "添加折扣",
           "remove": "删除折扣"
-        }
+        },
+        "vat": "VAT",
+        "vatIncluded": "VAT included"
       },
       "rejectDialog": {
         "title": "拒绝请求",
@@ -8423,6 +8434,7 @@
     "minRentalDurationViolation": "租赁期限必须至少为 {duration}",
     "maxRentalDurationViolation": "租赁期限不能超过{duration}",
     "deliveryNotEnabled": "该商店未启用送货服务",
+    "deliveryAndDistanceConflict": "配送费不能与里程费用同时收取。",
     "deliveryMinimumOrderAmountNotMet": "租赁{amount}可送货",
     "deliveryAddressRequired": "请输入有效的送货地址",
     "storeCoordinatesNotConfigured": "商店坐标未配置",

@@ -2390,7 +2390,9 @@
           "tooFar": "주소가 최대 거리({maxDistance}km)를 초과합니다.",
           "savings": "절약",
           "deliveryFee": "배송비"
-        }
+        },
+        "vat": "VAT",
+        "vatIncluded": "VAT included"
       },
       "contract": {
         "title": "계약",
@@ -2568,7 +2570,14 @@
           "addButton": "추가",
           "nameRequired": "항목의 이름을 입력하세요.",
           "priceRequired": "올바른 가격을 입력하세요.",
-          "added": "맞춤 항목이 추가되었습니다."
+          "added": "맞춤 항목이 추가되었습니다.",
+          "chargeKind": "How this line is billed",
+          "chargeKindDuration": "Hire rate for the reservation period",
+          "chargeKindOnce": "One-off fee",
+          "chargeKindDistance": "Distance charge",
+          "chargeKindOnceHint": "Charged once for this job. The hire length does not repeat it.",
+          "chargeKindDistanceHint": "Kilometres times the rate you enter. This is not stock and the hire length does not multiply it.",
+          "kilometres": "Kilometres"
         },
         "priceOverride": {
           "dialogTitle": "가격 수정",
@@ -2625,7 +2634,9 @@
           "label": "할인",
           "add": "할인 추가",
           "remove": "할인 삭제"
-        }
+        },
+        "vat": "VAT",
+        "vatIncluded": "VAT included"
       },
       "rejectDialog": {
         "title": "요청 거부",
@@ -8423,6 +8434,7 @@
     "minRentalDurationViolation": "대여 기간은 최소 {duration} 이상이어야 합니다.",
     "maxRentalDurationViolation": "대여 기간은 {duration}를 초과할 수 없습니다.",
     "deliveryNotEnabled": "이 매장에는 배달이 활성화되어 있지 않습니다.",
+    "deliveryAndDistanceConflict": "배송비와 거리 요금은 함께 청구할 수 없습니다.",
     "deliveryMinimumOrderAmountNotMet": "렌탈 {amount}부터 배송 가능",
     "deliveryAddressRequired": "유효한 배송 주소를 입력하세요.",
     "storeCoordinatesNotConfigured": "매장 좌표가 구성되지 않았습니다.",

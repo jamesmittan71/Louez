@@ -440,3 +440,120 @@ test("post-return charges are invoiced as one dedicated line, never scaled renta
     quantity_unit_code: "C62",
   });
 });
+
+test("fictional quote lines keep one-off fees and kilometres stable when VAT is scaled for a partial payment", () => {
+  const source: BuildInvoiceSnapshotsSource = {
+    ...baseSource,
+    reservation: {
+      deliveryFee: "0.00",
+      discountAmount: "0.00",
+      subtotalExclTax: "1230.00",
+      taxAmount: "184.50",
+      tulipInsuranceAmount: null,
+    },
+    store: {
+      ...baseSource.store,
+      settings: {
+        tax: { enabled: true, displayMode: "exclusive", defaultRate: 15 },
+      },
+    },
+    items: [
+      {
+        id: "hire",
+        productId: null,
+        quantity: 1,
+        unitPrice: "100.00",
+        totalPrice: "500.00",
+        taxRate: "15.00",
+        taxAmount: "75.00",
+        priceExclTax: "100.00",
+        totalExclTax: "500.00",
+        productSnapshot: { name: "Fictional generator hire", description: null },
+        pricingBreakdown: {
+          chargeKind: "duration",
+          duration: 5,
+          isManualOverride: true,
+          pricingKind: "duration",
+        },
+      },
+      {
+        id: "commissioning",
+        productId: null,
+        quantity: 1,
+        unitPrice: "250.00",
+        totalPrice: "250.00",
+        taxRate: "15.00",
+        taxAmount: "37.50",
+        priceExclTax: "250.00",
+        totalExclTax: "250.00",
+        productSnapshot: {
+          name: "Commissioning",
+          description: "Fictional start-up for this job",
+        },
+        pricingBreakdown: {
+          chargeKind: "once",
+          duration: 1,
+          isManualOverride: true,
+          pricingKind: "fixed",
+        },
+      },
+      {
+        id: "transport",
+        productId: null,
+        quantity: 1,
+        unitPrice: "12.00",
+        totalPrice: "480.00",
+        taxRate: "15.00",
+        taxAmount: "72.00",
+        priceExclTax: "12.00",
+        totalExclTax: "480.00",
+        productSnapshot: { name: "Transport", description: "Fictional entered distance" },
+        pricingBreakdown: {
+          chargeKind: "distance",
+          duration: 1,
+          billedQuantity: 40,
+          isManualOverride: true,
+          pricingKind: "fixed",
+        },
+      },
+    ],
+  };
+
+  const built = buildInvoiceSnapshots(source, {
+    number: "F-2026-00008",
+    issueDate: "2026-08-21",
+    type: "invoice",
+    currency: "ZAR",
+    amountInclTax: "1414.50",
+  });
+  const hire = built.lines.find((line) => line.id === "hire");
+  const commissioning = built.lines.find((line) => line.id === "commissioning");
+  const transport = built.lines.find((line) => line.id === "transport");
+  assert.equal(hire?.quantity, "5");
+  assert.equal(hire?.unitPriceExclTax, "100.00");
+  assert.equal(hire?.totalExclTax, "500.00");
+  assert.equal(hire?.taxAmount, "75.00");
+  assert.equal(commissioning?.quantity, "1");
+  assert.equal(commissioning?.unitPriceExclTax, "250.00");
+  assert.equal(commissioning?.totalExclTax, "250.00");
+  assert.equal(commissioning?.description, "Commissioning — Fictional start-up for this job");
+  assert.equal(transport?.quantity, "40");
+  assert.equal(transport?.unitPriceExclTax, "12.00");
+  assert.equal(transport?.taxAmount, "72.00");
+  assert.equal(built.totals.totalTax, "184.50");
+  assert.equal(built.totals.totalInclTax, "1414.50");
+
+  const partial = buildInvoiceSnapshots(source, {
+    number: "F-2026-00009",
+    issueDate: "2026-08-21",
+    type: "invoice",
+    currency: "ZAR",
+    amountInclTax: "707.25",
+  });
+  const partialCommissioning = partial.lines.find((line) => line.id === "commissioning");
+  assert.equal(partialCommissioning?.quantity, "1");
+  assert.equal(partialCommissioning?.totalExclTax, "125.00");
+  assert.equal(partialCommissioning?.taxAmount, "18.75");
+  assert.equal(partial.totals.totalInclTax, "707.25");
+  assert.equal(partial.totals.totalTax, "92.25");
+});
