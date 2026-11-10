@@ -35,7 +35,7 @@
   "scripts": {
     "qa:storefront": "node scripts/storefront-qa/cli.mjs",
     "build": "turbo run build",
-    "test": "turbo run test --continue && node --test \"scripts/**/*.test.mjs\"",
+    "test": "pnpm --filter @louez/web test && node --test \"scripts/**/*.test.mjs\"",
     "dev": "turbo run dev",
     "dev:web": "turbo dev --filter=@louez/web",
     "lint": "oxlint && pnpm audit:duplicates",

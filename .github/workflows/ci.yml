@@ -29,7 +29,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Check formatting of changed files
+      - name: Format changed files and export the patch
         run: |
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             git fetch --no-tags origin "$GITHUB_BASE_REF"
@@ -49,10 +49,17 @@ jobs:
           done
 
           if [ "${#format_files[@]}" -gt 0 ]; then
-            pnpm exec oxfmt --check "${format_files[@]}"
+            pnpm exec oxfmt --write "${format_files[@]}"
+            git diff --binary > "$RUNNER_TEMP/oxfmt.patch"
           else
-            echo "No supported changed files to format-check."
+            echo "No supported changed files to format."
           fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: oxfmt-patch
+          path: ${{ runner.temp }}/oxfmt.patch
+          if-no-files-found: ignore
       - run: pnpm lint
       - run: pnpm type-check
 
