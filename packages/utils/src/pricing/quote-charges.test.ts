@@ -196,3 +196,18 @@ test("dashboard VAT follows the store rate and does not tax an exempt line twice
   assert.equal(zeroRate.lines[0]?.taxRate, "0.00");
   assert.equal(zeroRate.lines[0]?.taxAmount, "0.00");
 });
+
+test("dashboard quote totals store a 150.00 exclusive line with 20% VAT", () => {
+  const editedReservation = buildDashboardQuoteTax({
+    lines: [{ id: "hire", amount: 150, taxRate: 20, quantity: 1, unitRate: 150 }],
+    deliveryFee: 0,
+    discountAmount: 0,
+    depositAmount: 0,
+    taxSettings: { enabled: true, defaultRate: 20, displayMode: "exclusive" },
+  });
+
+  assert.equal(editedReservation.subtotalExclTax, 150);
+  assert.equal(editedReservation.taxAmount, 30);
+  assert.equal(editedReservation.taxRate?.toFixed(2), "20.00");
+  assert.equal(editedReservation.totalAmount, 180);
+});

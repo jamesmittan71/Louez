@@ -9,8 +9,7 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema.ts",
     "./env": "./src/env.ts",
-    "./payment-receipts": "./src/payment-receipts.ts",
-    "./testing": "./src/testing/test-database.ts"
+    "./payment-receipts": "./src/payment-receipts.ts"
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",
