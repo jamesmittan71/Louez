@@ -2,11 +2,17 @@ name: Build & Publish Docker Images
 
 on:
   push:
+    branches:
+      - main
+      - "release/**"
     tags:
       - "v*"
   # Smoke-test the image on PRs that can break the Docker runtime environment
   # (the build job below only runs on tags / manual dispatch)
   pull_request:
+    branches:
+      - main
+      - "release/**"
     paths:
       - "docker/**"
       - "docker-compose.yml"
