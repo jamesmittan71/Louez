@@ -84,7 +84,8 @@ export function buildRecapItemLines({
   const customLines = customItems.map<ReservationRecapItemLine>((item) => ({
     id: item.id,
     name: item.name,
-    quantity: item.chargeKind === "distance" ? (item.billedQuantity ?? item.quantity) : item.quantity,
+    quantity:
+      item.chargeKind === "distance" ? (item.billedQuantity ?? item.quantity) : item.quantity,
     attributes: [],
     total: getCustomItemTotal(item),
     hasPriceOverride: false,

@@ -29,7 +29,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Format changed files and export the patch
+      - name: Check formatting of changed files
         run: |
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             git fetch --no-tags origin "$GITHUB_BASE_REF"
@@ -49,17 +49,10 @@ jobs:
           done
 
           if [ "${#format_files[@]}" -gt 0 ]; then
-            pnpm exec oxfmt --write "${format_files[@]}"
-            git diff --binary > "$RUNNER_TEMP/oxfmt.patch"
+            pnpm exec oxfmt --check "${format_files[@]}"
           else
-            echo "No supported changed files to format."
+            echo "No supported changed files to format-check."
           fi
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: oxfmt-patch
-          path: ${{ runner.temp }}/oxfmt.patch
-          if-no-files-found: ignore
       - run: pnpm lint
       - run: pnpm type-check
 
@@ -101,3 +94,5 @@ jobs:
         env:
           # The pricing-lock suite runs alone on louez_test, migrated above.
           PRICING_LOCK_TEST_DATABASE_URL: ${{ env.TEST_DATABASE_URL }}/louez_test
+          NEXT_PUBLIC_APP_URL: https://louez.test
+          NEXT_PUBLIC_APP_DOMAIN: louez.test

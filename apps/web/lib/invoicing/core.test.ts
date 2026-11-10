@@ -490,7 +490,12 @@ test("fictional quote lines keep one-off fees and kilometres stable when VAT is 
           name: "Commissioning",
           description: "Fictional start-up for this job",
         },
-        pricingBreakdown: { chargeKind: "once", duration: 1, isManualOverride: true, pricingKind: "fixed" },
+        pricingBreakdown: {
+          chargeKind: "once",
+          duration: 1,
+          isManualOverride: true,
+          pricingKind: "fixed",
+        },
       },
       {
         id: "transport",

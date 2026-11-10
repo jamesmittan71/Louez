@@ -7,7 +7,11 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { convertImageForPdf } from "./image-utils";
 import { getReservationInsuredProductIds } from "@/lib/reservations/get-insured-product-ids";
-import { getLogoForLightBackground, presentCommercialLine, resolveReservationBilling } from "@louez/utils";
+import {
+  getLogoForLightBackground,
+  presentCommercialLine,
+  resolveReservationBilling,
+} from "@louez/utils";
 
 import { getContractTranslations } from "./contract-i18n";
 import { isLocale } from "@/lib/i18n/format-locale";

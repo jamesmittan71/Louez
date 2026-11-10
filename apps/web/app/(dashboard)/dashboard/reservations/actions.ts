@@ -1461,7 +1461,10 @@ export async function createManualReservation(data: CreateReservationData) {
       ...productDetails.map((detail, index) => ({
         id: `catalog:${index}`,
         amount: Number(detail.totalPrice),
-        taxRate: quoteLineTaxRate(store.settings?.tax, readProductTaxSettings(detail.product.taxSettings)),
+        taxRate: quoteLineTaxRate(
+          store.settings?.tax,
+          readProductTaxSettings(detail.product.taxSettings),
+        ),
         quantity: detail.quantity,
         unitRate: Number(detail.unitPrice),
       })),
@@ -2271,10 +2274,7 @@ type ReservationItemUpdateValues = Pick<
   | "pricingBreakdown"
 > &
   Partial<
-    Pick<
-      ReservationItemInsertValues,
-      "taxRate" | "taxAmount" | "priceExclTax" | "totalExclTax"
-    >
+    Pick<ReservationItemInsertValues, "taxRate" | "taxAmount" | "priceExclTax" | "totalExclTax">
   >;
 
 type ReservationItemWrite =

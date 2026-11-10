@@ -280,9 +280,7 @@ export function useNewReservationPricing({
       }
 
       const rentalDuration =
-        startDate && endDate
-          ? calculateDurationForMode(startDate, endDate, item.pricingMode)
-          : 1;
+        startDate && endDate ? calculateDurationForMode(startDate, endDate, item.pricingMode) : 1;
       return priceQuoteCharge({
         chargeKind,
         rate: item.unitPrice,

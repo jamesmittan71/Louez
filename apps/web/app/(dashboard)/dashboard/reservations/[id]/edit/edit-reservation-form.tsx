@@ -782,8 +782,7 @@ export function EditReservationForm({
     const multiplier = chargeKind === "duration" ? customDuration : 1;
     const count = chargeKind === "distance" ? 1 : Math.max(1, Math.round(enteredQuantity));
     const rateQuantity = chargeKind === "distance" ? enteredQuantity : count;
-    const effectiveUnitPrice =
-      unitPrice > 0 ? unitPrice : totalPrice / (multiplier * rateQuantity);
+    const effectiveUnitPrice = unitPrice > 0 ? unitPrice : totalPrice / (multiplier * rateQuantity);
 
     const newItem: EditableItem = {
       id: `custom-${Date.now()}`,
@@ -1580,53 +1579,53 @@ export function EditReservationForm({
               getDurationForMode(customItemForm.pricingMode) > 0 ? (
                 <div className="rounded-lg border bg-muted/30 p-4 space-y-4">
                   {customItemForm.chargeKind === "duration" ? (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      {tForm("customItem.pricingPeriod")}
-                    </span>
-                    <span className="font-medium">
-                      {getDurationForMode(customItemForm.pricingMode)}{" "}
-                      {getDurationUnit(customItemForm.pricingMode)} × {customItemForm.quantity || 1}{" "}
-                      {tForm("customItem.units")}
-                    </span>
-                  </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        {tForm("customItem.pricingPeriod")}
+                      </span>
+                      <span className="font-medium">
+                        {getDurationForMode(customItemForm.pricingMode)}{" "}
+                        {getDurationUnit(customItemForm.pricingMode)} ×{" "}
+                        {customItemForm.quantity || 1} {tForm("customItem.units")}
+                      </span>
+                    </div>
                   ) : null}
 
                   {customItemForm.chargeKind === "duration" ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="custom-pricing-mode" className="text-xs">
-                      {tForm("pricingMode")}
-                    </Label>
-                    <Select
-                      value={customItemForm.pricingMode}
-                      onValueChange={(value) => {
-                        if (value === null) return;
-                        const pricingMode = value as PricingMode;
-                        setCustomItemForm((prev) => ({ ...prev, pricingMode }));
-                      }}
-                    >
-                      <SelectTrigger id="custom-pricing-mode" className="h-9">
-                        <SelectValue>
-                          {customItemForm.pricingMode === "hour"
-                            ? tForm("perHour")
-                            : customItemForm.pricingMode === "day"
-                              ? tForm("perDay")
-                              : tForm("perWeek")}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="hour" label={tForm("perHour")}>
-                          {tForm("perHour")}
-                        </SelectItem>
-                        <SelectItem value="day" label={tForm("perDay")}>
-                          {tForm("perDay")}
-                        </SelectItem>
-                        <SelectItem value="week" label={tForm("perWeek")}>
-                          {tForm("perWeek")}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="custom-pricing-mode" className="text-xs">
+                        {tForm("pricingMode")}
+                      </Label>
+                      <Select
+                        value={customItemForm.pricingMode}
+                        onValueChange={(value) => {
+                          if (value === null) return;
+                          const pricingMode = value as PricingMode;
+                          setCustomItemForm((prev) => ({ ...prev, pricingMode }));
+                        }}
+                      >
+                        <SelectTrigger id="custom-pricing-mode" className="h-9">
+                          <SelectValue>
+                            {customItemForm.pricingMode === "hour"
+                              ? tForm("perHour")
+                              : customItemForm.pricingMode === "day"
+                                ? tForm("perDay")
+                                : tForm("perWeek")}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="hour" label={tForm("perHour")}>
+                            {tForm("perHour")}
+                          </SelectItem>
+                          <SelectItem value="day" label={tForm("perDay")}>
+                            {tForm("perDay")}
+                          </SelectItem>
+                          <SelectItem value="week" label={tForm("perWeek")}>
+                            {tForm("perWeek")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   ) : null}
 
                   <div className="grid grid-cols-2 gap-4">

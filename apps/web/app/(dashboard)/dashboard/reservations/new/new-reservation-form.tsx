@@ -852,10 +852,10 @@ export function NewReservationForm({
         ? existingLine.quantity + 1
         : constraints.lineMaxQuantity === null
           ? existingLine.quantity + 1
-        : Math.min(
-            existingLine.quantity + 1,
-            Math.max(existingLine.quantity, constraints.lineMaxQuantity),
-          );
+          : Math.min(
+              existingLine.quantity + 1,
+              Math.max(existingLine.quantity, constraints.lineMaxQuantity),
+            );
 
       return prev.map((line) => {
         if (line.lineId !== existingLine.lineId) {
@@ -929,10 +929,7 @@ export function NewReservationForm({
           ? Math.max(1, currentLine.quantity + delta)
           : Math.max(
               1,
-              Math.min(
-                currentLine.quantity + delta,
-                Math.max(1, constraints.lineMaxQuantity),
-              ),
+              Math.min(currentLine.quantity + delta, Math.max(1, constraints.lineMaxQuantity)),
             );
 
       if (nextQuantity === currentLine.quantity) {
@@ -1035,8 +1032,7 @@ export function NewReservationForm({
     watchStartDate && watchEndDate
       ? calculateDurationForMode(watchStartDate, watchEndDate, customItemForm.pricingMode)
       : 0;
-  const customChargeMultiplier =
-    customItemForm.chargeKind === "duration" ? customItemDuration : 1;
+  const customChargeMultiplier = customItemForm.chargeKind === "duration" ? customItemDuration : 1;
 
   // Calculate unit price from total price
   const calculateUnitPriceFromTotal = (totalPrice: string, qty: string) => {
@@ -1507,12 +1503,7 @@ export function NewReservationForm({
                               )}
                             </p>
                             <p className="text-muted-foreground text-[11px] tabular-nums">
-                              {formatStoreDate(
-                                watchStartDate,
-                                timezone,
-                                "HH:mm",
-                                formatLocale,
-                              )}
+                              {formatStoreDate(watchStartDate, timezone, "HH:mm", formatLocale)}
                             </p>
                           </div>
 
@@ -1555,20 +1546,10 @@ export function NewReservationForm({
 
                           <div className="min-w-0 text-right">
                             <p className="text-xs font-medium tabular-nums">
-                              {formatStoreDate(
-                                watchEndDate,
-                                timezone,
-                                "d MMM yyyy",
-                                formatLocale,
-                              )}
+                              {formatStoreDate(watchEndDate, timezone, "d MMM yyyy", formatLocale)}
                             </p>
                             <p className="text-muted-foreground text-[11px] tabular-nums">
-                              {formatStoreDate(
-                                watchEndDate,
-                                timezone,
-                                "HH:mm",
-                                formatLocale,
-                              )}
+                              {formatStoreDate(watchEndDate, timezone, "HH:mm", formatLocale)}
                             </p>
                           </div>
                         </div>
@@ -1927,53 +1908,53 @@ export function NewReservationForm({
                 </div>
               </div>
               {customItemForm.chargeKind === "duration" ? (
-              <div className="space-y-2">
-                <Label htmlFor="custom-pricing-mode">{t("customItem.pricingPeriod")}</Label>
-                <Select
-                  value={customItemForm.pricingMode}
-                  onValueChange={(value) =>
-                    setCustomItemForm({
-                      ...customItemForm,
-                      pricingMode: value as PricingMode,
-                    })
-                  }
-                >
-                  <SelectTrigger id="custom-pricing-mode">
-                    <SelectValue>
-                      {customItemForm.pricingMode === "hour" && t("perHour")}
-                      {customItemForm.pricingMode === "day" && t("perDay")}
-                      {customItemForm.pricingMode === "week" && "week"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="hour" label={t("perHour")}>
-                      {t("perHour")}
-                    </SelectItem>
-                    <SelectItem value="day" label={t("perDay")}>
-                      {t("perDay")}
-                    </SelectItem>
-                    <SelectItem value="week" label="week">
-                      week
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="custom-pricing-mode">{t("customItem.pricingPeriod")}</Label>
+                  <Select
+                    value={customItemForm.pricingMode}
+                    onValueChange={(value) =>
+                      setCustomItemForm({
+                        ...customItemForm,
+                        pricingMode: value as PricingMode,
+                      })
+                    }
+                  >
+                    <SelectTrigger id="custom-pricing-mode">
+                      <SelectValue>
+                        {customItemForm.pricingMode === "hour" && t("perHour")}
+                        {customItemForm.pricingMode === "day" && t("perDay")}
+                        {customItemForm.pricingMode === "week" && "week"}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="hour" label={t("perHour")}>
+                        {t("perHour")}
+                      </SelectItem>
+                      <SelectItem value="day" label={t("perDay")}>
+                        {t("perDay")}
+                      </SelectItem>
+                      <SelectItem value="week" label="week">
+                        week
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               ) : null}
               {(customItemForm.chargeKind !== "duration" || customItemDuration > 0) && (
                 <div className="bg-muted/30 space-y-3 rounded-lg border p-3">
                   {customItemForm.chargeKind === "duration" ? (
-                  <div className="text-muted-foreground flex items-center justify-between text-sm">
-                    <span>{t("customItem.pricingPeriod")}</span>
-                    <span className="text-foreground font-medium">
-                      {customItemDuration}{" "}
-                      {customItemForm.pricingMode === "hour"
-                        ? "h"
-                        : customItemForm.pricingMode === "week"
-                          ? "sem"
-                          : "j"}{" "}
-                      × {customItemForm.quantity || 1} unité(s)
-                    </span>
-                  </div>
+                    <div className="text-muted-foreground flex items-center justify-between text-sm">
+                      <span>{t("customItem.pricingPeriod")}</span>
+                      <span className="text-foreground font-medium">
+                        {customItemDuration}{" "}
+                        {customItemForm.pricingMode === "hour"
+                          ? "h"
+                          : customItemForm.pricingMode === "week"
+                            ? "sem"
+                            : "j"}{" "}
+                        × {customItemForm.quantity || 1} unité(s)
+                      </span>
+                    </div>
                   ) : (
                     <p className="text-muted-foreground text-sm">
                       {customItemForm.chargeKind === "distance"

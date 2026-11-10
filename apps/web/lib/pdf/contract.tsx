@@ -700,7 +700,9 @@ export function ContractDocument({
                     </View>
                     {reservation.signedAt && (
                       <View style={styles.signatureDateRow}>
-                        <Text style={styles.signatureDateLabel}>{t.signature.validatedOnLabel}</Text>
+                        <Text style={styles.signatureDateLabel}>
+                          {t.signature.validatedOnLabel}
+                        </Text>
                         <Text style={styles.signatureDate}>
                           {formatDateTimePrecise(reservation.signedAt)}
                         </Text>
