@@ -2,7 +2,13 @@ import { useMemo } from "react";
 import { useStoreTimezone } from "@/contexts/store-context";
 
 import type { PricingKind, PricingMode } from "@louez/types";
-import { calculateDurationMinutes, isRateBasedProduct, minutesToPriceDuration } from "@louez/utils";
+import {
+  calculateDurationMinutes,
+  isRateBasedProduct,
+  minutesToPriceDuration,
+  priceQuoteCharge,
+  readQuoteChargeKind,
+} from "@louez/utils";
 
 import { calculateCartItemPrice } from "@/lib/utils/cart-pricing";
 import { calculateDuration } from "@/lib/utils/duration";
@@ -122,12 +128,23 @@ export function calculateEditableItemPrice(
   };
 
   const mode = item.pricingMode;
+  const chargeKind = item.product ? "duration" : readQuoteChargeKind(item.chargeKind);
   const duration =
-    item.product?.pricingKind === "fixed" ? 1 : calculateDuration(startDate, endDate, mode);
+    item.product?.pricingKind === "fixed" || chargeKind !== "duration"
+      ? 1
+      : calculateDuration(startDate, endDate, mode);
 
-  // Manual price or custom item (no product): simple multiplication
+  // Manual price or custom item (no product): simple multiplication.
+  // One-off and distance lines ignore the hire span.
   if (item.isManualPrice || !item.product) {
-    const totalPrice = roundCurrency(item.unitPrice * duration * item.quantity);
+    const priced = priceQuoteCharge({
+      chargeKind,
+      rate: item.unitPrice,
+      quantity: chargeKind === "distance" ? 1 : item.quantity,
+      billedQuantity: item.billedQuantity,
+      rentalDuration: chargeKind === "duration" ? duration : 1,
+    });
+    const totalPrice = priced.total;
     return {
       totalPrice,
       effectiveUnitPrice: item.unitPrice,

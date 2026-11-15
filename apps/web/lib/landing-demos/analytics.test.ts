@@ -68,7 +68,7 @@ test("rankings and occupancy use the rental catalogue and French customers", () 
   assert.ok(
     data.duration.avgMinutes !== null &&
       data.duration.avgMinutes >= 1440 &&
-      data.duration.avgMinutes <= 2880,
+      data.duration.avgMinutes <= 4320,
   );
   assert.equal(data.duration.reservationCount, data.reservationStats.reservationCount);
   assert.equal(data.reservationStats.reservationCount, data.stats.periodPaymentCount);

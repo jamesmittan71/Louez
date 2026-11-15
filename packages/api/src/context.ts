@@ -172,6 +172,8 @@ export interface BaseContext {
           depositPerUnit: number;
           isManualPrice?: boolean;
           pricingMode?: "hour" | "day" | "week";
+          chargeKind?: "duration" | "once" | "distance";
+          billedQuantity?: number;
           productSnapshot: {
             name: string;
             description?: string | null;
@@ -280,6 +282,8 @@ export interface BaseContext {
         deposit: number;
         quantity: number;
         pricingMode: "hour" | "day" | "week";
+        chargeKind?: "duration" | "once" | "distance";
+        billedQuantity?: number;
       }>;
       delivery?: {
         outbound: {

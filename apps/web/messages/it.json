@@ -2351,7 +2351,9 @@
           "tooFar": "L'indirizzo supera la distanza massima ({maxDistance} km)",
           "savings": "Risparmio",
           "deliveryFee": "Spese di consegna"
-        }
+        },
+        "vat": "VAT",
+        "vatIncluded": "VAT included"
       },
       "contract": {
         "title": "Contratto",
@@ -2529,7 +2531,14 @@
           "addButton": "Aggiungi",
           "nameRequired": "Inserisci un nome per l'articolo",
           "priceRequired": "Inserisci un prezzo valido",
-          "added": "Articolo personalizzato aggiunto"
+          "added": "Articolo personalizzato aggiunto",
+          "chargeKind": "How this line is billed",
+          "chargeKindDuration": "Hire rate for the reservation period",
+          "chargeKindOnce": "One-off fee",
+          "chargeKindDistance": "Distance charge",
+          "chargeKindOnceHint": "Charged once for this job. The hire length does not repeat it.",
+          "chargeKindDistanceHint": "Kilometres times the rate you enter. This is not stock and the hire length does not multiply it.",
+          "kilometres": "Kilometres"
         },
         "priceOverride": {
           "dialogTitle": "Modifica prezzo",
@@ -2586,7 +2595,9 @@
           "label": "Sconto",
           "add": "Aggiungi uno sconto",
           "remove": "Rimuovi lo sconto"
-        }
+        },
+        "vat": "VAT",
+        "vatIncluded": "VAT included"
       },
       "rejectDialog": {
         "title": "Rifiuta richiesta",
@@ -8423,6 +8434,7 @@
     "minRentalDurationViolation": "La durata del noleggio deve essere di almeno {duration}",
     "maxRentalDurationViolation": "La durata del noleggio non può superare le {duration}",
     "deliveryNotEnabled": "La consegna non è attivata per questo negozio",
+    "deliveryAndDistanceConflict": "La tariffa di consegna non può essere combinata con un costo a distanza.",
     "deliveryMinimumOrderAmountNotMet": "La consegna è disponibile a partire da {amount} di noleggio",
     "deliveryAddressRequired": "Inserisci un indirizzo di consegna valido",
     "storeCoordinatesNotConfigured": "Le coordinate del negozio non sono configurate",

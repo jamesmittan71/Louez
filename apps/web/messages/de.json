@@ -2390,7 +2390,9 @@
           "tooFar": "Adresse überschreitet maximale Entfernung ({maxDistance} km)",
           "savings": "Ersparnis",
           "deliveryFee": "Liefergebühr"
-        }
+        },
+        "vat": "VAT",
+        "vatIncluded": "VAT included"
       },
       "contract": {
         "title": "Vertrag",
@@ -2568,7 +2570,14 @@
           "addButton": "Hinzufügen",
           "nameRequired": "Bitte geben Sie einen Namen für den Artikel ein",
           "priceRequired": "Bitte geben Sie einen gültigen Preis ein",
-          "added": "Benutzerdefinierter Artikel hinzugefügt"
+          "added": "Benutzerdefinierter Artikel hinzugefügt",
+          "chargeKind": "How this line is billed",
+          "chargeKindDuration": "Hire rate for the reservation period",
+          "chargeKindOnce": "One-off fee",
+          "chargeKindDistance": "Distance charge",
+          "chargeKindOnceHint": "Charged once for this job. The hire length does not repeat it.",
+          "chargeKindDistanceHint": "Kilometres times the rate you enter. This is not stock and the hire length does not multiply it.",
+          "kilometres": "Kilometres"
         },
         "priceOverride": {
           "dialogTitle": "Preis bearbeiten",
@@ -2625,7 +2634,9 @@
           "label": "Rabatt",
           "add": "Rabatt hinzufügen",
           "remove": "Rabatt entfernen"
-        }
+        },
+        "vat": "VAT",
+        "vatIncluded": "VAT included"
       },
       "rejectDialog": {
         "title": "Anfrage ablehnen",
@@ -8423,6 +8434,7 @@
     "minRentalDurationViolation": "Die Mietdauer muss mindestens {duration} betragen",
     "maxRentalDurationViolation": "Die Mietdauer darf {duration} nicht überschreiten",
     "deliveryNotEnabled": "Lieferung ist für diesen Shop nicht aktiviert",
+    "deliveryAndDistanceConflict": "Liefergebühren können nicht mit einer Entfernungsgebühr kombiniert werden.",
     "deliveryMinimumOrderAmountNotMet": "Die Lieferung ist ab einem Mietbetrag von {amount} verfügbar",
     "deliveryAddressRequired": "Bitte geben Sie eine gültige Lieferadresse ein",
     "storeCoordinatesNotConfigured": "Shop-Koordinaten sind nicht konfiguriert",

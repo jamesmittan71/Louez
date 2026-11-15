@@ -6,8 +6,10 @@ import type {
   DeliverySettings,
   PricingKind,
   PricingMode,
+  ProductTaxSettings,
   Rate,
   StockKind,
+  TaxSettings,
   TulipPublicMode,
   UnitAttributes,
 } from "@louez/types";
@@ -50,6 +52,7 @@ export interface Product {
   }>;
   pricingTiers: ProductPricingTier[];
   seasonalPricings?: SeasonalPricingConfig[];
+  taxSettings?: ProductTaxSettings | null;
 }
 
 export interface SelectedProduct {
@@ -71,6 +74,10 @@ export interface CustomItem {
   quantity: number;
   pricingMode: PricingMode;
   basePeriodMinutes: number;
+  /** Missing means the historical hire-period line. */
+  chargeKind?: "duration" | "once" | "distance";
+  /** Kilometres for a distance line. Not a stock count. */
+  billedQuantity?: number;
 }
 
 export interface DetailedDuration {
@@ -153,6 +160,7 @@ export interface NewReservationFormProps {
   storeLongitude?: number | null;
   storeAddress?: string | null;
   storeLocations: ReservationLocationOption[];
+  taxSettings?: TaxSettings;
 }
 
 export type StepFieldName = "customerId" | "startDate" | "endDate";

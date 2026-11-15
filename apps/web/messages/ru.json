@@ -2390,7 +2390,9 @@
           "tooFar": "Адрес превышает максимальное расстояние ({maxDistance} км)",
           "savings": "Экономия",
           "deliveryFee": "Стоимость доставки"
-        }
+        },
+        "vat": "VAT",
+        "vatIncluded": "VAT included"
       },
       "contract": {
         "title": "Контракт",
@@ -2568,7 +2570,14 @@
           "addButton": "Добавить",
           "nameRequired": "Пожалуйста, введите название товара",
           "priceRequired": "Пожалуйста, введите действительную цену",
-          "added": "Пользовательский элемент добавлен"
+          "added": "Пользовательский элемент добавлен",
+          "chargeKind": "How this line is billed",
+          "chargeKindDuration": "Hire rate for the reservation period",
+          "chargeKindOnce": "One-off fee",
+          "chargeKindDistance": "Distance charge",
+          "chargeKindOnceHint": "Charged once for this job. The hire length does not repeat it.",
+          "chargeKindDistanceHint": "Kilometres times the rate you enter. This is not stock and the hire length does not multiply it.",
+          "kilometres": "Kilometres"
         },
         "priceOverride": {
           "dialogTitle": "Изменить цену",
@@ -2625,7 +2634,9 @@
           "label": "Скидка",
           "add": "Добавить скидку",
           "remove": "Удалить скидку"
-        }
+        },
+        "vat": "VAT",
+        "vatIncluded": "VAT included"
       },
       "rejectDialog": {
         "title": "Отклонить запрос",
@@ -8423,6 +8434,7 @@
     "minRentalDurationViolation": "Продолжительность аренды должна быть не менее {duration}.",
     "maxRentalDurationViolation": "Срок аренды не может превышать {duration}.",
     "deliveryNotEnabled": "Доставка не включена для этого магазина.",
+    "deliveryAndDistanceConflict": "Плату за доставку нельзя совмещать с оплатой за расстояние.",
     "deliveryMinimumOrderAmountNotMet": "Возможна доставка с {amount} аренды.",
     "deliveryAddressRequired": "Пожалуйста, введите действительный адрес доставки",
     "storeCoordinatesNotConfigured": "Координаты магазина не настроены",

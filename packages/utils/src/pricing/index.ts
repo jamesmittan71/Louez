@@ -36,6 +36,26 @@ export {
 
 // Tax utilities
 export {
+  QUOTE_CHARGE_KINDS,
+  type QuoteChargeKind,
+  type QuoteChargeInput,
+  type QuoteChargeResult,
+  type CommercialLineInput,
+  type CommercialLinePresentation,
+  type DashboardQuoteTaxLine,
+  type DashboardQuoteTaxColumns,
+  type DashboardQuoteTaxLineResult,
+  type DashboardQuoteTaxResult,
+  readQuoteChargeKind,
+  hasDeliveryAndDistanceConflict,
+  readProductTaxSettings,
+  priceQuoteCharge,
+  presentCommercialLine,
+  buildDashboardQuoteTax,
+  quoteLineTaxRate,
+} from "./quote-charges";
+
+export {
   type TaxConfig,
   type PriceCalculationResultWithTax,
   type TaxableLine,

@@ -12,6 +12,7 @@ import {
 } from "@louez/db";
 import type { LegMethod, PricingKind, StockKind } from "@louez/types";
 import type { SeasonalPricingConfig } from "@louez/utils";
+import { readProductTaxSettings } from "@louez/utils";
 
 const NON_EDITABLE_STATUSES = new Set(["completed", "cancelled", "rejected"]);
 const AVAILABILITY_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
@@ -48,6 +49,7 @@ interface RawProduct {
   enforceStrictTiers: boolean;
   pricingTiers: RawTier[];
   seasonalPricings: RawSeasonalPricing[];
+  taxSettings?: unknown;
   tulipMapping?: { productId: string } | null;
 }
 
@@ -115,6 +117,7 @@ function mapProduct(p: RawProduct) {
     tulipInsurable: Boolean(p.tulipMapping?.productId),
     pricingTiers: mapPricingTiers(p.pricingTiers),
     seasonalPricings: mapSeasonalPricings(p.seasonalPricings),
+    taxSettings: readProductTaxSettings(p.taxSettings),
   };
 }
 
